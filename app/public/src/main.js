@@ -210,10 +210,36 @@ function parseSwitchResults(output, type) {
   return results;
 }
 
+function parseCoremarkResults(output) {
+  const text = stripAnsi(output);
+  const results = [];
+  const seen = new Set();
+  const patterns = [
+    /Iterations\/Sec\s*[:=]\s*([0-9.]+)/gi,
+    /CoreMark\s+1(?:\.0)?\s*:\s*([0-9.]+)/gi,
+    /CoreMark\s*[:=]\s*([0-9.]+)/gi
+  ];
+
+  patterns.forEach((pattern) => {
+    let match;
+    while ((match = pattern.exec(text))) {
+      const iterationsPerSec = Number.parseFloat(match[1]);
+      if (!Number.isFinite(iterationsPerSec)) continue;
+      const key = iterationsPerSec.toFixed(6);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push({ iterationsPerSec });
+    }
+  });
+
+  return results;
+}
+
 function parseCollectedMeasurements(preferredResult = null) {
   const output = collectResultOutputs(preferredResult);
   return {
     partition: parsePartitionSummaries(output),
+    coremark: parseCoremarkResults(output),
     process: parseSwitchResults(output, "process"),
     thread: parseSwitchResults(output, "thread"),
     hackbench: parseSwitchResults(output, "hackbench")
@@ -378,6 +404,7 @@ function summarizeLatestResult(result) {
   const process = parseSwitchResults(output, "process");
   const thread = parseSwitchResults(output, "thread");
   const hackbench = parseSwitchResults(output, "hackbench");
+  const coremark = parseCoremarkResults(output);
 
   const appendSwitchLines = (title, resultMap, keyLabel) => {
     if (!resultMap.size) return;
@@ -390,6 +417,14 @@ function summarizeLatestResult(result) {
     });
   };
 
+  if (coremark.length) {
+    if (lines.length) lines.push("");
+    lines.push("CoreMark 基准测试");
+    coremark.forEach((item, index) => {
+      const label = coremark.length > 1 ? `run=${index + 1}: ` : "";
+      lines.push(`${label}Iterations/Sec=${formatChartNumber(item.iterationsPerSec)}`);
+    });
+  }
   appendSwitchLines("进程上下文切换", process, "iterations");
   appendSwitchLines("线程上下文切换", thread, "iterations");
   appendSwitchLines("Hackbench 并发调度", hackbench, "loops");

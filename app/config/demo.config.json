@@ -34,7 +34,7 @@
     "allowTerminalInput": true
   },
   "commands": {
-    "runProtectionTest": "./coremark.exe",
+    "runProtectionTest": "./test_with",
     "runPerfCoremark": "./coremark.exe",
     "runPerfProc": "./ctxswitch_proc -n 100 -w 50 -s; ./ctxswitch_proc -n 1000 -w 500 -s; ./ctxswitch_proc -s",
     "runPerfThread": "./ctxswitch_thread -s -n 100 -w 50; ./ctxswitch_thread -s -n 1000 -w 500; ./ctxswitch_thread -s",
