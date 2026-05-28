@@ -373,40 +373,8 @@
                 <h2>性能测试结果</h2>
               </div>
             </div>
-            <div class="performance-summary">
-              <article>
-                <span>防护有效性</span>
-                <strong id="summaryPartitionValue">等待采集</strong>
-                <small id="summaryPartitionNote">SID 分离状态与 TLB 扰动幅度</small>
-              </article>
-              <article>
-                <span>进程切换</span>
-                <strong id="summaryProcessValue">等待采集</strong>
-                <small id="summaryProcessNote">per_switch 开销范围</small>
-              </article>
-              <article>
-                <span>线程切换</span>
-                <strong id="summaryThreadValue">等待采集</strong>
-                <small id="summaryThreadNote">per_switch 开销范围</small>
-              </article>
-              <article>
-                <span>并发调度</span>
-                <strong id="summaryHackbenchValue">等待采集</strong>
-                <small id="summaryHackbenchNote">Hackbench 调度压力</small>
-              </article>
-            </div>
-            <div class="chart-grid report-charts">
-              <article class="chart-card wide-chart">
-                <div class="result-head">
-                  <div>
-                    <span class="eyebrow">Cache</span>
-                    <h3>Hit / Miss 访问周期</h3>
-                  </div>
-                  <span class="badge muted">无防护基线</span>
-                </div>
-                <svg class="bar-chart" id="cacheLatencyChart" viewBox="0 0 760 320" role="img" aria-label="Cache Hit Miss 访问周期"></svg>
-              </article>
-              <article class="chart-card">
+            <div class="performance-dashboard">
+              <article class="chart-card partition-dashboard-card">
                 <div class="result-head">
                   <div>
                     <span class="eyebrow">Partition</span>
@@ -414,37 +382,99 @@
                   </div>
                   <span class="badge good" id="partitionOverheadBadge">等待采集</span>
                 </div>
-                <svg class="bar-chart" id="coremarkChart" viewBox="0 0 520 300" role="img" aria-label="TLB 分区防护有效性"></svg>
+                <div class="partition-status">
+                  <span class="status-light" id="partitionStatusLight"></span>
+                  <div>
+                    <strong id="summaryPartitionValue">等待采集</strong>
+                    <small id="summaryPartitionNote">SID 分离状态与 TLB 扰动幅度</small>
+                  </div>
+                </div>
+                <svg class="bar-chart dashboard-main-chart" id="coremarkChart" viewBox="0 0 680 330" role="img" aria-label="TLB 分区防护有效性"></svg>
               </article>
-              <article class="chart-card">
+
+              <article class="chart-card overhead-dashboard-card">
                 <div class="result-head">
                   <div>
-                    <span class="eyebrow">Process</span>
-                    <h3>进程上下文切换</h3>
+                    <span class="eyebrow">Overhead</span>
+                    <h3>开销指标</h3>
                   </div>
-                  <span class="badge idle" id="processOverheadBadge">等待采集</span>
                 </div>
-                <svg class="bar-chart" id="processSwitchChart" viewBox="0 0 520 300" role="img" aria-label="进程上下文切换压力测试"></svg>
+                <div class="ring-grid">
+                  <article class="ring-card">
+                    <svg id="processRingChart" viewBox="0 0 160 160" aria-label="进程切换开销"></svg>
+                    <span>进程切换</span>
+                    <strong id="summaryProcessValue">等待采集</strong>
+                    <small id="summaryProcessNote">采集后显示开销范围</small>
+                  </article>
+                  <article class="ring-card">
+                    <svg id="threadRingChart" viewBox="0 0 160 160" aria-label="线程切换开销"></svg>
+                    <span>线程切换</span>
+                    <strong id="summaryThreadValue">等待采集</strong>
+                    <small id="summaryThreadNote">采集后显示开销范围</small>
+                  </article>
+                  <article class="ring-card">
+                    <svg id="hackbenchRingChart" viewBox="0 0 160 160" aria-label="并发调度开销"></svg>
+                    <span>并发调度</span>
+                    <strong id="summaryHackbenchValue">等待采集</strong>
+                    <small id="summaryHackbenchNote">采集后显示开销范围</small>
+                  </article>
+                </div>
               </article>
-              <article class="chart-card">
+
+              <article class="chart-card cache-dashboard-card">
                 <div class="result-head">
                   <div>
-                    <span class="eyebrow">Thread</span>
-                    <h3>线程上下文切换</h3>
+                    <span class="eyebrow">Cache</span>
+                    <h3>Hit / Miss 访问周期</h3>
                   </div>
-                  <span class="badge muted" id="threadOverheadBadge">等待采集</span>
+                  <span class="badge muted">无防护基线</span>
                 </div>
-                <svg class="bar-chart" id="threadSwitchChart" viewBox="0 0 520 300" role="img" aria-label="线程上下文切换压力测试"></svg>
+                <svg class="bar-chart cache-dashboard-chart" id="cacheLatencyChart" viewBox="0 0 760 260" role="img" aria-label="Cache Hit Miss 访问周期"></svg>
               </article>
-              <article class="chart-card">
+
+              <div class="trend-grid">
+                <article class="chart-card trend-card">
+                  <div class="result-head">
+                    <div>
+                      <span class="eyebrow">Process</span>
+                      <h3>进程上下文切换</h3>
+                    </div>
+                    <span class="badge idle" id="processOverheadBadge">等待采集</span>
+                  </div>
+                  <svg class="bar-chart trend-chart" id="processSwitchChart" viewBox="0 0 760 320" role="img" aria-label="进程上下文切换压力测试"></svg>
+                </article>
+                <article class="chart-card trend-card">
+                  <div class="result-head">
+                    <div>
+                      <span class="eyebrow">Thread</span>
+                      <h3>线程上下文切换</h3>
+                    </div>
+                    <span class="badge muted" id="threadOverheadBadge">等待采集</span>
+                  </div>
+                  <svg class="bar-chart trend-chart" id="threadSwitchChart" viewBox="0 0 760 320" role="img" aria-label="线程上下文切换压力测试"></svg>
+                </article>
+                <article class="chart-card trend-card trend-wide">
+                  <div class="result-head">
+                    <div>
+                      <span class="eyebrow">Hackbench</span>
+                      <h3>并发调度压力</h3>
+                    </div>
+                    <span class="badge idle" id="hackbenchOverheadBadge">等待采集</span>
+                  </div>
+                  <svg class="bar-chart trend-chart" id="hackbenchChart" viewBox="0 0 1260 340" role="img" aria-label="Hackbench 并发调度压力测试"></svg>
+                </article>
+              </div>
+
+              <article class="chart-card performance-table-card">
                 <div class="result-head">
                   <div>
-                    <span class="eyebrow">Hackbench</span>
-                    <h3>并发调度压力</h3>
+                    <span class="eyebrow">Data</span>
+                    <h3>详细数值表</h3>
                   </div>
-                  <span class="badge idle" id="hackbenchOverheadBadge">等待采集</span>
                 </div>
-                <svg class="bar-chart" id="hackbenchChart" viewBox="0 0 520 300" role="img" aria-label="Hackbench 并发调度压力测试"></svg>
+                <div class="performance-table-wrap">
+                  <table class="performance-table" id="performanceDataTable"></table>
+                </div>
               </article>
             </div>
           </section>
