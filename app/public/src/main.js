@@ -61,28 +61,28 @@ const fixedReportData = {
     ]
   },
   partition: {
-    type: "zero-delta",
+    type: "partition-bar",
     selector: "#coremarkChart",
     unit: "cyc",
     categories: ["8", "16", "32"],
     fallbackValues: [0, 0, 0]
   },
   processSwitch: {
-    type: "sparkline",
+    type: "grouped-bar",
     selector: "#processSwitchChart",
     unit: "us/switch",
     categories: ["100", "1000", "100000"],
     baseline: [846.59, 815.32, 826.93]
   },
   threadSwitch: {
-    type: "sparkline",
+    type: "grouped-bar",
     selector: "#threadSwitchChart",
     unit: "us/switch",
     categories: ["100", "1000", "200000"],
     baseline: [985.34, 930.22, 898.43]
   },
   hackbench: {
-    type: "sparkline",
+    type: "value-line",
     selector: "#hackbenchChart",
     unit: "us/switch",
     categories: ["10", "100", "1000", "10000"],
@@ -332,6 +332,7 @@ function buildReportCharts(parsed = parseCollectedMeasurements()) {
       selector: fixedReportData.partition.selector,
       unit: fixedReportData.partition.unit,
       categories: fixedReportData.partition.categories,
+      fallbackValues: fixedReportData.partition.fallbackValues,
       series: partitionSeries
     },
     processSwitch: {
@@ -849,7 +850,6 @@ function renderReportCharts() {
   updateReportBadges(parsed);
   updatePerformanceSummary(parsed);
   drawOverheadRings(parsed);
-  renderPerformanceTable(parsed);
 }
 
 function updatePerformanceSummary(parsed) {
@@ -943,7 +943,7 @@ function drawOverheadRing(selector, percent) {
   };
 
   const value = Number.isFinite(percent) ? percent : null;
-  const magnitude = value === null ? 0 : Math.min(1, Math.abs(value) / 30);
+  const magnitude = value === null ? 0 : Math.min(1, Math.abs(value) / 100);
   const radius = 54;
   const circumference = Math.PI * 2 * radius;
   const color = value === null ? "#9aa49a" : Math.abs(value) <= 5 ? chartColors.protected : Math.abs(value) <= 15 ? chartColors.protected : "#b23a32";
@@ -962,61 +962,6 @@ function drawOverheadRing(selector, percent) {
   });
   add("text", { x: 80, y: 76, "text-anchor": "middle", fill: "#20251f", "font-size": 18, "font-weight": 900 }, value === null ? "--" : formatPercent(value));
   add("text", { x: 80, y: 96, "text-anchor": "middle", fill: "#657064", "font-size": 10, "font-weight": 800 }, "avg");
-}
-
-function renderPerformanceTable(parsed) {
-  const table = $("#performanceDataTable");
-  if (!table) return;
-  const rows = [];
-
-  fixedReportData.cacheLatency.categories.forEach((category, index) => {
-    fixedReportData.cacheLatency.series.forEach((series) => {
-      rows.push(["Cache", category, series.name, `${formatChartNumber(series.values[index])} cyc`, "--"]);
-    });
-  });
-
-  parsed.partition.forEach((item) => {
-    rows.push([
-      "TLB",
-      `EVICT ${item.evictPages}`,
-      "delta_p50 median",
-      `${formatChartNumber(item.deltaP50?.median)} cyc`,
-      `SID ${item.sidParent ?? "--"}/${item.sidChild ?? "--"}`
-    ]);
-  });
-
-  appendSwitchRows(rows, "Process", fixedReportData.processSwitch, parsed.process);
-  appendSwitchRows(rows, "Thread", fixedReportData.threadSwitch, parsed.thread);
-  appendSwitchRows(rows, "Hackbench", fixedReportData.hackbench, parsed.hackbench);
-
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th>模块</th>
-        <th>参数点</th>
-        <th>指标</th>
-        <th>数值</th>
-        <th>备注</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows.length ? rows.map((row) => `
-        <tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>
-      `).join("") : `<tr><td colspan="5">暂无可展示数据</td></tr>`}
-    </tbody>
-  `;
-}
-
-function appendSwitchRows(rows, label, config, resultMap) {
-  config.categories.forEach((category, index) => {
-    const baseline = config.baseline[index];
-    const protectedValue = resultMap.get(category)?.perSwitchUs ?? null;
-    rows.push([label, category, "无防护 per_switch", `${formatChartNumber(baseline)} us`, "固定基线"]);
-    if (Number.isFinite(protectedValue)) {
-      const overhead = baseline ? ((protectedValue - baseline) / baseline) * 100 : null;
-      rows.push([label, category, "有防护 per_switch", `${formatChartNumber(protectedValue)} us`, formatPercent(overhead)]);
-    }
-  });
 }
 
 function updateOverheadSummary(valueSelector, noteSelector, baseline, realValues) {
@@ -1039,12 +984,16 @@ function setText(selector, text) {
 function drawChart(config) {
   if (config.type === "line-area") {
     drawLineAreaChart(config);
+  } else if (config.type === "partition-bar") {
+    drawPartitionBarChart(config);
   } else if (config.type === "zero-delta") {
     drawZeroDeltaChart(config);
   } else if (config.type === "combo") {
     drawComboChart(config);
   } else if (config.type === "sparkline") {
     drawSparklineChart(config);
+  } else if (config.type === "value-line") {
+    drawValueLineChart(config);
   } else {
     drawGroupedBarChart(config);
   }
@@ -1183,8 +1132,76 @@ function drawLineAreaChart(config) {
   drawLegend(ctx, config.series.map((item) => ({ ...item, legendShape: "line" })));
 }
 
+function drawPartitionBarChart(config) {
+  const ctx = createChartContext(config, { padding: { top: 58, right: 36, bottom: 58, left: 66 } });
+  if (!ctx) return;
+  const hasData = config.series.some((series) => series.values.some((value) => Number.isFinite(value)));
+  const series = hasData
+    ? config.series
+    : [{ name: "delta_p50 median", color: "#9aa49a", values: config.fallbackValues || config.categories.map(() => 0) }];
+  const values = series.flatMap((item) => item.values).filter((value) => Number.isFinite(value));
+  const magnitude = hasData ? Math.max(5, ...values.map((value) => Math.abs(value))) * 1.45 : 7;
+  const minValue = -magnitude;
+  const maxValue = magnitude;
+  const zeroY = valueToY(ctx, 0, minValue, maxValue);
+  const safeTop = valueToY(ctx, 5, minValue, maxValue);
+  const safeBottom = valueToY(ctx, -5, minValue, maxValue);
+  const categoryWidth = ctx.plotWidth / config.categories.length;
+  const barGap = hasData ? 8 : 0;
+  const seriesCount = Math.max(1, series.length);
+  const barWidth = Math.max(34, Math.min(72, (categoryWidth * 0.34 - barGap * (seriesCount - 1)) / seriesCount));
+
+  drawGrid(ctx, config.unit, minValue, maxValue);
+  ctx.add("line", { x1: ctx.padding.left, y1: safeTop, x2: ctx.width - ctx.padding.right, y2: safeTop, stroke: "#8bc28b", "stroke-width": 1, "stroke-dasharray": "4 7" });
+  ctx.add("line", { x1: ctx.padding.left, y1: safeBottom, x2: ctx.width - ctx.padding.right, y2: safeBottom, stroke: "#8bc28b", "stroke-width": 1, "stroke-dasharray": "4 7" });
+  ctx.add("line", { x1: ctx.padding.left, y1: zeroY, x2: ctx.width - ctx.padding.right, y2: zeroY, stroke: "#2d7a35", "stroke-width": 1.4 });
+
+  config.categories.forEach((category, categoryIndex) => {
+    const centerX = ctx.padding.left + categoryWidth * categoryIndex + categoryWidth / 2;
+    series.forEach((item, seriesIndex) => {
+      const value = item.values[categoryIndex];
+      if (!Number.isFinite(value)) return;
+      const x = centerX - (seriesCount * barWidth + (seriesCount - 1) * barGap) / 2 + seriesIndex * (barWidth + barGap);
+      if (!hasData) {
+        ctx.add("rect", {
+          x,
+          y: zeroY - 18,
+          width: barWidth,
+          height: 36,
+          rx: 4,
+          fill: "none",
+          stroke: "#aeb8ac",
+          "stroke-width": 1.4,
+          "stroke-dasharray": "5 5"
+        });
+        return;
+      }
+      const y = valueToY(ctx, value, minValue, maxValue);
+      const barY = Math.min(y, zeroY);
+      const barHeight = Math.max(2, Math.abs(zeroY - y));
+      const labelY = value < 0 ? zeroY + barHeight + 16 : y - 8;
+      ctx.add("rect", { x, y: barY, width: barWidth, height: barHeight, rx: 3, fill: item.color, opacity: 0.9 });
+      ctx.add("text", { x: x + barWidth / 2, y: labelY, "text-anchor": "middle", fill: "#20251f", "font-size": 11, "font-weight": 800 }, formatChartNumber(value));
+    });
+    ctx.add("text", {
+      x: centerX,
+      y: ctx.height - 24,
+      "text-anchor": "middle",
+      fill: "#20251f",
+      "font-size": 12,
+      "font-weight": 700
+    }, category);
+  });
+
+  if (hasData) {
+    drawLegend(ctx, series.map((item) => ({ ...item, legendShape: "bar" })));
+  } else {
+    ctx.add("text", { x: ctx.width / 2, y: ctx.padding.top - 18, "text-anchor": "middle", fill: "#657064", "font-size": 13, "font-weight": 800 }, "等待防护有效性采集");
+  }
+}
+
 function drawZeroDeltaChart(config) {
-  const ctx = createChartContext(config, { padding: { top: 38, right: 34, bottom: 58, left: 62 } });
+  const ctx = createChartContext(config, { padding: { top: 58, right: 36, bottom: 58, left: 66 } });
   if (!ctx) return;
   const values = config.series.flatMap((item) => item.values).filter((value) => Number.isFinite(value));
   const magnitude = Math.max(5, ...values.map((value) => Math.abs(value))) * 1.45;
@@ -1198,25 +1215,38 @@ function drawZeroDeltaChart(config) {
   ctx.add("line", { x1: ctx.padding.left, y1: safeTop, x2: ctx.width - ctx.padding.right, y2: safeTop, stroke: "#8bc28b", "stroke-width": 1, "stroke-dasharray": "4 7" });
   ctx.add("line", { x1: ctx.padding.left, y1: safeBottom, x2: ctx.width - ctx.padding.right, y2: safeBottom, stroke: "#8bc28b", "stroke-width": 1, "stroke-dasharray": "4 7" });
   ctx.add("line", { x1: ctx.padding.left, y1: zeroY, x2: ctx.width - ctx.padding.right, y2: zeroY, stroke: "#2d7a35", "stroke-width": 1.6 });
-  ctx.add("text", { x: ctx.width - ctx.padding.right, y: 20, "text-anchor": "end", fill: "#2d7a35", "font-size": 10, "font-weight": 800 }, "阈值 ±5 cyc");
 
+  const categoryWidth = ctx.plotWidth / config.categories.length;
+  const barWidth = Math.max(28, Math.min(72, categoryWidth * 0.28));
   config.series.forEach((series) => {
     series.values.forEach((value, index) => {
       if (!Number.isFinite(value)) return;
-      const x = categoryX(ctx, config.categories, index);
+      const x = ctx.padding.left + categoryWidth * index + categoryWidth / 2;
       const y = valueToY(ctx, value, minValue, maxValue);
-      ctx.add("line", { x1: x, y1: zeroY, x2: x, y2: y, stroke: series.color, "stroke-width": 1.5, opacity: 0.48 });
-      ctx.add("circle", { cx: x, cy: y, r: 5, fill: series.color, stroke: "#fbfcf8", "stroke-width": 2 });
-      ctx.add("text", { x, y: value < 0 ? y + 18 : y - 10, "text-anchor": "middle", fill: "#20251f", "font-size": 10, "font-weight": 800 }, formatChartNumber(value));
+      const barY = Math.min(y, zeroY);
+      const barHeight = Math.max(2, Math.abs(zeroY - y));
+      const labelY = value < 0 ? zeroY + barHeight + 16 : y - 8;
+      ctx.add("rect", { x: x - barWidth / 2, y: barY, width: barWidth, height: barHeight, rx: 3, fill: series.color, opacity: 0.88 });
+      ctx.add("text", { x, y: labelY, "text-anchor": "middle", fill: "#20251f", "font-size": 11, "font-weight": 800 }, formatChartNumber(value));
     });
   });
 
   if (!config.series.length) {
     ctx.add("text", { x: ctx.width / 2, y: ctx.height / 2, "text-anchor": "middle", fill: "#657064", "font-size": 14, "font-weight": 800 }, "等待防护有效性采集");
   }
-  drawCategoryLabels(ctx, config.categories);
+  config.categories.forEach((category, index) => {
+    const x = ctx.padding.left + categoryWidth * index + categoryWidth / 2;
+    ctx.add("text", {
+      x,
+      y: ctx.height - 24,
+      "text-anchor": "middle",
+      fill: "#20251f",
+      "font-size": 12,
+      "font-weight": 700
+    }, category);
+  });
   if (config.series.length) {
-    ctx.add("text", { x: ctx.padding.left, y: 20, fill: "#657064", "font-size": 11, "font-weight": 800 }, "delta_p50 median");
+    drawLegend(ctx, config.series.map((item) => ({ ...item, legendShape: "bar" })));
   }
 }
 
@@ -1313,6 +1343,42 @@ function drawSparklineChart(config) {
           const pct = ((value - baseValue) / baseValue) * 100;
           ctx.add("text", { x, y: y + 20, "text-anchor": "middle", fill: series.color, "font-size": 10, "font-weight": 800 }, formatPercent(pct));
         }
+      }
+    });
+  });
+
+  drawCategoryLabels(ctx, config.categories, { edgeAware: true });
+  drawLegend(ctx, config.series.map((item) => ({ ...item, legendShape: "line" })));
+}
+
+function drawValueLineChart(config) {
+  const ctx = createChartContext(config, { padding: { top: 48, right: 72, bottom: 58, left: 72 } });
+  if (!ctx) return;
+  const values = config.series.flatMap((item) => item.values).filter((value) => Number.isFinite(value));
+  const maxValue = Math.max(1, ...values) * 1.12;
+  const minValue = Math.min(0, ...values) * 0.92;
+
+  drawGrid(ctx, config.unit, minValue, maxValue);
+
+  config.series.forEach((series, seriesIndex) => {
+    const points = series.values
+      .map((value, index) => Number.isFinite(value) ? [categoryX(ctx, config.categories, index), valueToY(ctx, value, minValue, maxValue), value] : null)
+      .filter(Boolean);
+    if (!points.length) return;
+    const path = points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" ");
+    ctx.add("path", {
+      d: path,
+      fill: "none",
+      stroke: series.color,
+      "stroke-width": seriesIndex === 0 ? 2.4 : 3.2,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      opacity: seriesIndex === 0 ? 0.78 : 1
+    });
+    points.forEach(([x, y, value]) => {
+      ctx.add("circle", { cx: x, cy: y, r: seriesIndex === 0 ? 4 : 5.5, fill: series.color, stroke: "#fbfcf8", "stroke-width": 1.5 });
+      if (seriesIndex === config.series.length - 1) {
+        ctx.add("text", { x, y: y - 12, "text-anchor": "middle", fill: "#20251f", "font-size": 11, "font-weight": 800 }, formatChartNumber(value));
       }
     });
   });

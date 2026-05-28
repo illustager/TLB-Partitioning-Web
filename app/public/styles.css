@@ -71,15 +71,14 @@ button:disabled {
 }
 
 .brand-mark {
-  width: 46px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  color: #f6fbf3;
-  background: var(--teal);
+  width: 68px;
+  height: 62px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  object-position: center;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--teal);
 }
 
 .brand strong,
@@ -255,10 +254,7 @@ h3 { font-size: 16px; }
   overflow: hidden;
   padding: 18px;
   border-radius: var(--radius);
-  background:
-    linear-gradient(180deg, rgba(244, 246, 242, 0.58), rgba(244, 246, 242, 0.86)),
-    url("./assets/232dad00af3d6c3f1071ad852e45e09d.png") center 18px / contain no-repeat,
-    var(--bg);
+  background: var(--bg);
 }
 
 #overview > * {
@@ -268,8 +264,8 @@ h3 { font-size: 16px; }
 
 #overview .panel,
 #overview .stat-card {
-  background-color: rgba(251, 252, 248, 0.78);
-  backdrop-filter: blur(3px);
+  background-color: var(--surface);
+  backdrop-filter: none;
 }
 
 .panel,
@@ -316,8 +312,8 @@ h3 { font-size: 16px; }
   padding: 34px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  background: rgba(247, 249, 245, 0.42);
-  backdrop-filter: blur(2px);
+  background: var(--surface);
+  backdrop-filter: none;
   box-shadow: var(--shadow);
 }
 
@@ -326,10 +322,10 @@ h3 { font-size: 16px; }
   align-content: start;
   gap: 14px;
   width: min(720px, 100%);
-  padding: 26px;
+  padding: 0;
   border-radius: 8px;
-  background: rgba(247, 249, 245, 0.68);
-  backdrop-filter: blur(3px);
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .hero-title {
@@ -933,43 +929,6 @@ input:disabled {
 .trend-wide {
   grid-column: 1 / -1;
   min-height: 450px;
-}
-
-.performance-table-card {
-  grid-column: 1 / -1;
-}
-
-.performance-table-wrap {
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-.performance-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 760px;
-  background: rgba(251, 252, 248, 0.86);
-}
-
-.performance-table th,
-.performance-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.performance-table th {
-  color: var(--muted);
-  background: var(--surface-2);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.performance-table tr:last-child td {
-  border-bottom: 0;
 }
 
 .bar-chart {
