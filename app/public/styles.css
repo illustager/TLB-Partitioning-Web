@@ -71,14 +71,14 @@ button:disabled {
 }
 
 .brand-mark {
-  width: 42px;
+  width: 46px;
   height: 42px;
   display: grid;
   place-items: center;
   color: #f6fbf3;
   background: var(--teal);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -249,6 +249,29 @@ h3 { font-size: 16px; }
   gap: 18px;
 }
 
+#overview {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 18px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(244, 246, 242, 0.58), rgba(244, 246, 242, 0.86)),
+    url("./assets/232dad00af3d6c3f1071ad852e45e09d.png") center 18px / contain no-repeat,
+    var(--bg);
+}
+
+#overview > * {
+  position: relative;
+  z-index: 1;
+}
+
+#overview .panel,
+#overview .stat-card {
+  background-color: rgba(251, 252, 248, 0.78);
+  backdrop-filter: blur(3px);
+}
+
 .panel,
 .stat-card,
 .connection-card,
@@ -283,28 +306,51 @@ h3 { font-size: 16px; }
 }
 
 .hero-panel {
-  min-height: 320px;
+  min-height: 430px;
   display: grid;
+  position: relative;
+  overflow: hidden;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
-  gap: 26px;
-  align-items: stretch;
-  padding: 24px;
+  gap: 28px;
+  align-items: center;
+  padding: 34px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
-  background: #f7f9f5;
+  background: rgba(247, 249, 245, 0.42);
+  backdrop-filter: blur(2px);
   box-shadow: var(--shadow);
 }
 
 .hero-copy {
   display: grid;
-  align-content: center;
+  align-content: start;
   gap: 14px;
+  width: min(720px, 100%);
+  padding: 26px;
+  border-radius: 8px;
+  background: rgba(247, 249, 245, 0.68);
+  backdrop-filter: blur(3px);
 }
 
-.hero-copy h2 {
+.hero-title {
+  display: grid;
+  gap: 6px;
   max-width: 720px;
-  font-size: clamp(30px, 4vw, 48px);
-  line-height: 1.08;
+}
+
+.hero-title span {
+  display: block;
+  font-size: clamp(42px, 5.4vw, 72px);
+  line-height: 1;
+  font-weight: 900;
+}
+
+.hero-title small {
+  display: block;
+  color: var(--ink);
+  font-size: clamp(20px, 2.5vw, 32px);
+  line-height: 1.2;
+  font-weight: 800;
 }
 
 .hero-copy p {
@@ -326,16 +372,22 @@ h3 { font-size: 16px; }
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 8px;
+  align-self: end;
+  padding: 18px;
+  border-radius: 8px;
+  background: rgba(247, 249, 245, 0.32);
+  backdrop-filter: blur(2px);
 }
 
 .board-figure img {
   width: 100%;
   height: 100%;
-  min-height: 260px;
+  max-height: 340px;
+  min-height: 240px;
   object-fit: contain;
   border-radius: 8px;
-  background: #eef2ed;
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 0;
 }
 
 .board-figure figcaption {
@@ -715,6 +767,44 @@ input:disabled {
   gap: 14px;
 }
 
+.performance-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.performance-summary article {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(216, 238, 234, 0.68), rgba(251, 252, 248, 0.92) 54%),
+    var(--surface);
+}
+
+.performance-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.performance-summary strong {
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.performance-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .chart-card {
   min-width: 0;
   display: grid;
@@ -731,7 +821,9 @@ input:disabled {
   display: block;
   border-radius: 8px;
   border: 1px solid var(--line);
-  background: var(--surface-2);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(216, 238, 234, 0.82), transparent 24%),
+    linear-gradient(180deg, rgba(251, 252, 248, 0.94), rgba(238, 242, 237, 0.88));
 }
 
 .toast {
@@ -772,6 +864,7 @@ input:disabled {
 
   .dashboard-grid,
   .compact-dashboard,
+  .performance-summary,
   .metric-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -830,6 +923,7 @@ input:disabled {
   .metric-summary,
   .dashboard-grid,
   .compact-dashboard,
+  .performance-summary,
   .role-grid,
   .timeline,
   .meta-list {

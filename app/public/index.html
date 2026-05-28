@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VexRiscv TLB Partitioning 安全演示平台</title>
+    <title>芯域双垒 侧信道防御系统演示平台</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="主导航">
         <div class="brand">
-          <div class="brand-mark">TLB</div>
+          <div class="brand-mark">芯域</div>
           <div>
-            <strong>VexRiscv Lab</strong>
-            <span>Partitioning Demo</span>
+            <strong>芯域双垒</strong>
+            <span>侧信道防御系统</span>
           </div>
         </div>
 
@@ -51,7 +51,6 @@
       <main class="workspace">
         <header class="topbar">
           <div>
-            <span class="eyebrow" id="modeEyebrow">实验工作区</span>
             <h1 id="pageTitle">概览</h1>
           </div>
           <div class="status-strip" aria-label="系统状态">
@@ -65,19 +64,21 @@
         <section class="view active" id="overview">
           <section class="hero-panel">
             <div class="hero-copy">
-              <span class="eyebrow">NEXYS-A7 + VexRiscv + Linux</span>
-              <h2>Cache / TLB 分区防护演示平台</h2>
+              <h2 class="hero-title">
+                <span>芯域双垒</span>
+                <small>侧信道防御系统演示平台</small>
+              </h2>
               <p>
-                平台用于复现无防护状态下的侧信道攻击链路，并在 FPGA 运行环境中采集有防护状态下的功能和性能结果。
+                面向侧信道防御成果展示，集中呈现 Cache 与 TLB 两类隔离防护能力、在线采集流程和性能对比结果。
               </p>
               <div class="hero-actions">
-                <button class="btn primary" data-jump="connections">连接目标</button>
-                <button class="btn ghost" data-jump="protected">进入采集</button>
+                <button class="btn primary" data-jump="connections">查看连接状态</button>
+                <button class="btn ghost" data-jump="protected">开始演示采集</button>
               </div>
             </div>
             <figure class="board-figure">
-              <img src="./assets/nexys-a7.jpg" alt="NEXYS-A7 FPGA 开发板" />
-              <figcaption>Digilent NEXYS-A7 FPGA 开发板</figcaption>
+              <img src="./assets/9d21dc3facefbf983e73658f23a95b4c.png" alt="芯域双垒 FPGA 开发板" />
+              <figcaption>芯域双垒 FPGA 开发板</figcaption>
             </figure>
           </section>
 
@@ -116,20 +117,20 @@
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <span class="eyebrow">目标说明</span>
-                  <h2>Cache 与 TLB</h2>
+                  <span class="eyebrow">能力展示</span>
+                  <h2>双域防护能力</h2>
                 </div>
               </div>
               <div class="target-summary">
                 <article>
-                  <span>Cache</span>
-                  <strong id="overviewCacheTarget">远程 WSL</strong>
-                  <p>连接另一台电脑上的 WSL 环境，用于 Cache 防护测试与性能采集。</p>
+                  <span>Cache 防护</span>
+                  <strong id="overviewCacheTarget">缓存侧信道隔离</strong>
+                  <p>展示缓存访问隔离策略对侧信道观测链路的削弱效果，并提供可视化性能对比。</p>
                 </article>
                 <article>
-                  <span>TLB</span>
-                  <strong id="overviewTlbTarget">FPGA SSH</strong>
-                  <p>保持当前连接方式，直接通过 SSH 连接运行 Linux 的 NEXYS-A7 开发板。</p>
+                  <span>TLB 防护</span>
+                  <strong id="overviewTlbTarget">地址转换分区</strong>
+                  <p>展示基于进程域隔离的 TLB 分区防护效果，验证跨域干扰被限制在可控范围内。</p>
                 </article>
               </div>
             </section>
@@ -371,6 +372,28 @@
               <div>
                 <h2>性能测试结果</h2>
               </div>
+            </div>
+            <div class="performance-summary">
+              <article>
+                <span>防护有效性</span>
+                <strong id="summaryPartitionValue">等待采集</strong>
+                <small id="summaryPartitionNote">SID 分离状态与 TLB 扰动幅度</small>
+              </article>
+              <article>
+                <span>进程切换</span>
+                <strong id="summaryProcessValue">等待采集</strong>
+                <small id="summaryProcessNote">per_switch 开销范围</small>
+              </article>
+              <article>
+                <span>线程切换</span>
+                <strong id="summaryThreadValue">等待采集</strong>
+                <small id="summaryThreadNote">per_switch 开销范围</small>
+              </article>
+              <article>
+                <span>并发调度</span>
+                <strong id="summaryHackbenchValue">等待采集</strong>
+                <small id="summaryHackbenchNote">Hackbench 调度压力</small>
+              </article>
             </div>
             <div class="chart-grid report-charts">
               <article class="chart-card wide-chart">
