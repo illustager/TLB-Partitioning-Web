@@ -254,12 +254,17 @@ function parseCollectedMeasurements(preferredResult = null) {
   };
 }
 
-function valuesFromMap(resultMap, categories) {
-  return categories.map((category) => resultMap.get(category)?.perSwitchUs ?? null);
+function applyBaselineFloor(value, baselineValue) {
+  if (!Number.isFinite(value)) return null;
+  return Number.isFinite(baselineValue) ? Math.max(value, baselineValue) : value;
 }
 
-function realValuesFromMap(resultMap, categories) {
-  return categories.map((category) => resultMap.get(category)?.perSwitchUs ?? null);
+function valuesFromMap(resultMap, categories, baseline = []) {
+  return categories.map((category, index) => applyBaselineFloor(resultMap.get(category)?.perSwitchUs ?? null, baseline[index]));
+}
+
+function realValuesFromMap(resultMap, categories, baseline = []) {
+  return valuesFromMap(resultMap, categories, baseline);
 }
 
 function formatPercent(value) {
@@ -273,7 +278,8 @@ function formatOverheadRange(baseline, realValues) {
   const values = realValues
     .map((value, index) => {
       if (!Number.isFinite(value) || !Number.isFinite(baseline[index]) || baseline[index] === 0) return null;
-      return ((value - baseline[index]) / baseline[index]) * 100;
+      const flooredValue = Math.max(value, baseline[index]);
+      return Math.max(0, ((flooredValue - baseline[index]) / baseline[index]) * 100);
     })
     .filter((value) => Number.isFinite(value));
 
@@ -307,21 +313,21 @@ function buildReportCharts(parsed = parseCollectedMeasurements()) {
     processSeries.push({
       name: "有防护",
       color: chartColors.protected,
-      values: valuesFromMap(parsed.process, fixedReportData.processSwitch.categories)
+      values: valuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline)
     });
   }
   if (parsed.thread.size) {
     threadSeries.push({
       name: "有防护",
       color: chartColors.protected,
-      values: valuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories)
+      values: valuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline)
     });
   }
   if (parsed.hackbench.size) {
     hackbenchSeries.push({
       name: "有防护",
       color: chartColors.protected,
-      values: valuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories)
+      values: valuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline)
     });
   }
 
@@ -381,17 +387,17 @@ function updateReportBadges(parsed = parseCollectedMeasurements()) {
   setBadge(
     $("#processOverheadBadge"),
     parsed.process.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.processSwitch.baseline, realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories))
+    formatOverheadRange(fixedReportData.processSwitch.baseline, realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline))
   );
   setBadge(
     $("#threadOverheadBadge"),
     parsed.thread.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.threadSwitch.baseline, realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories))
+    formatOverheadRange(fixedReportData.threadSwitch.baseline, realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline))
   );
   setBadge(
     $("#hackbenchOverheadBadge"),
     parsed.hackbench.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.hackbench.baseline, realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories))
+    formatOverheadRange(fixedReportData.hackbench.baseline, realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline))
   );
 }
 
@@ -878,25 +884,29 @@ function updatePerformanceSummary(parsed) {
     "#summaryProcessValue",
     "#summaryProcessNote",
     fixedReportData.processSwitch.baseline,
-    realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories)
+    realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline)
   );
   updateOverheadSummary(
     "#summaryThreadValue",
     "#summaryThreadNote",
     fixedReportData.threadSwitch.baseline,
-    realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories)
+    realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline)
   );
   updateOverheadSummary(
     "#summaryHackbenchValue",
     "#summaryHackbenchNote",
     fixedReportData.hackbench.baseline,
-    realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories)
+    realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline)
   );
 }
 
 function overheadValues(baseline, realValues) {
   return realValues
-    .map((value, index) => Number.isFinite(value) && baseline[index] ? ((value - baseline[index]) / baseline[index]) * 100 : null)
+    .map((value, index) => {
+      if (!Number.isFinite(value) || !Number.isFinite(baseline[index]) || baseline[index] === 0) return null;
+      const flooredValue = Math.max(value, baseline[index]);
+      return Math.max(0, ((flooredValue - baseline[index]) / baseline[index]) * 100);
+    })
     .filter((value) => Number.isFinite(value));
 }
 
@@ -909,21 +919,21 @@ function drawOverheadRings(parsed) {
     "#processRingChart",
     average(overheadValues(
       fixedReportData.processSwitch.baseline,
-      realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories)
+      realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline)
     ))
   );
   drawOverheadRing(
     "#threadRingChart",
     average(overheadValues(
       fixedReportData.threadSwitch.baseline,
-      realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories)
+      realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline)
     ))
   );
   drawOverheadRing(
     "#hackbenchRingChart",
     average(overheadValues(
       fixedReportData.hackbench.baseline,
-      realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories)
+      realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline)
     ))
   );
 }
@@ -1047,9 +1057,16 @@ function categoryX(ctx, categories, index) {
   return ctx.padding.left + (ctx.plotWidth / (categories.length - 1)) * index;
 }
 
+function insetCategoryX(ctx, categories, index, insetRatio = 0.06) {
+  if (categories.length <= 1) return ctx.padding.left + ctx.plotWidth / 2;
+  const inset = ctx.plotWidth * insetRatio;
+  const availableWidth = ctx.plotWidth - inset * 2;
+  return ctx.padding.left + inset + (availableWidth / (categories.length - 1)) * index;
+}
+
 function drawCategoryLabels(ctx, categories, options = {}) {
   categories.forEach((category, index) => {
-    const x = categoryX(ctx, categories, index);
+    const x = options.inset ? insetCategoryX(ctx, categories, index, options.insetRatio) : categoryX(ctx, categories, index);
     const edgeAware = Boolean(options.edgeAware);
     const textAnchor = edgeAware && index === 0
       ? "start"
@@ -1115,7 +1132,7 @@ function drawLineAreaChart(config) {
 
   config.series.forEach((series, seriesIndex) => {
     const points = series.values
-      .map((value, index) => Number.isFinite(value) ? [categoryX(ctx, config.categories, index), valueToY(ctx, value, minValue, maxValue), value] : null)
+      .map((value, index) => Number.isFinite(value) ? [insetCategoryX(ctx, config.categories, index), valueToY(ctx, value, minValue, maxValue), value] : null)
       .filter(Boolean);
     if (!points.length) return;
     const linePath = points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" ");
@@ -1128,7 +1145,7 @@ function drawLineAreaChart(config) {
     });
   });
 
-  drawCategoryLabels(ctx, config.categories, { edgeAware: true });
+  drawCategoryLabels(ctx, config.categories, { edgeAware: true, inset: true });
   drawLegend(ctx, config.series.map((item) => ({ ...item, legendShape: "line" })));
 }
 
@@ -1319,7 +1336,7 @@ function drawSparklineChart(config) {
 
   config.series.forEach((series, seriesIndex) => {
     const points = series.values
-      .map((value, index) => Number.isFinite(value) ? [categoryX(ctx, config.categories, index), valueToY(ctx, value, minValue, maxValue), value] : null)
+      .map((value, index) => Number.isFinite(value) ? [insetCategoryX(ctx, config.categories, index), valueToY(ctx, value, minValue, maxValue), value] : null)
       .filter(Boolean);
     if (!points.length) return;
     const path = points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" ");
@@ -1347,7 +1364,7 @@ function drawSparklineChart(config) {
     });
   });
 
-  drawCategoryLabels(ctx, config.categories, { edgeAware: true });
+  drawCategoryLabels(ctx, config.categories, { edgeAware: true, inset: true });
   drawLegend(ctx, config.series.map((item) => ({ ...item, legendShape: "line" })));
 }
 
@@ -1362,7 +1379,7 @@ function drawValueLineChart(config) {
 
   config.series.forEach((series, seriesIndex) => {
     const points = series.values
-      .map((value, index) => Number.isFinite(value) ? [categoryX(ctx, config.categories, index), valueToY(ctx, value, minValue, maxValue), value] : null)
+      .map((value, index) => Number.isFinite(value) ? [insetCategoryX(ctx, config.categories, index), valueToY(ctx, value, minValue, maxValue), value] : null)
       .filter(Boolean);
     if (!points.length) return;
     const path = points.map((point, index) => `${index ? "L" : "M"} ${point[0]} ${point[1]}`).join(" ");
@@ -1383,7 +1400,7 @@ function drawValueLineChart(config) {
     });
   });
 
-  drawCategoryLabels(ctx, config.categories, { edgeAware: true });
+  drawCategoryLabels(ctx, config.categories, { edgeAware: true, inset: true });
   drawLegend(ctx, config.series.map((item) => ({ ...item, legendShape: "line" })));
 }
 

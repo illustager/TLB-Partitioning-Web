@@ -377,19 +377,12 @@
               <article class="chart-card partition-dashboard-card">
                 <div class="result-head">
                   <div>
-                    <span class="eyebrow">Partition</span>
-                    <h3>防护有效性</h3>
+                    <span class="eyebrow">Hackbench</span>
+                    <h3>并发调度压力</h3>
                   </div>
-                  <span class="badge good" id="partitionOverheadBadge">等待采集</span>
+                  <span class="badge idle" id="hackbenchOverheadBadge">等待采集</span>
                 </div>
-                <div class="partition-status">
-                  <span class="status-light" id="partitionStatusLight"></span>
-                  <div>
-                    <strong id="summaryPartitionValue">等待采集</strong>
-                    <small id="summaryPartitionNote">SID 分离状态与 TLB 扰动幅度</small>
-                  </div>
-                </div>
-                <svg class="bar-chart dashboard-main-chart" id="coremarkChart" viewBox="0 0 680 330" role="img" aria-label="TLB 分区防护有效性"></svg>
+                <svg class="bar-chart dashboard-main-chart" id="hackbenchChart" viewBox="0 0 680 330" role="img" aria-label="Hackbench 并发调度压力测试"></svg>
               </article>
 
               <article class="chart-card overhead-dashboard-card">
@@ -452,16 +445,6 @@
                     <span class="badge muted" id="threadOverheadBadge">等待采集</span>
                   </div>
                   <svg class="bar-chart trend-chart" id="threadSwitchChart" viewBox="0 0 760 320" role="img" aria-label="线程上下文切换压力测试"></svg>
-                </article>
-                <article class="chart-card trend-card trend-wide">
-                  <div class="result-head">
-                    <div>
-                      <span class="eyebrow">Hackbench</span>
-                      <h3>并发调度压力</h3>
-                    </div>
-                    <span class="badge idle" id="hackbenchOverheadBadge">等待采集</span>
-                  </div>
-                  <svg class="bar-chart trend-chart" id="hackbenchChart" viewBox="0 0 1260 340" role="img" aria-label="Hackbench 并发调度压力测试"></svg>
                 </article>
               </div>
             </div>
