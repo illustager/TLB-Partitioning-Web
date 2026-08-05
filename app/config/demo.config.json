@@ -9,11 +9,11 @@
       "label": "Cache FPGA",
       "kind": "remote-wsl",
       "protection": "cache",
-      "host": "192.168.1.100",
+      "host": "192.168.185.41",
       "port": 22,
-      "username": "root",
+      "username": "ubuntu01",
       "authProfile": "password",
-      "password": "174044",
+      "password": "Zhang060915",
       "workingDirectory": "/home/ubuntu01/VexRiscv"
     },
     {
