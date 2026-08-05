@@ -12,9 +12,9 @@ const state = {
 const views = {
   overview: "概览",
   connections: "连接",
-  unprotected: "无防护 POC",
-  protected: "有防护 SSH / 数据采集",
-  compare: "性能结果对比"
+  unprotected: "攻击 POC",
+  protected: "防护采集",
+  compare: "结果对比"
 };
 
 const phaseLabels = {
@@ -23,8 +23,10 @@ const phaseLabels = {
   communicating: "通信中",
   recovering: "密钥恢复中",
   "key-recovered": "密钥已恢复",
+  "key-mismatch": "密钥校验失败",
   eavesdropping: "Eve 已启用",
   "message-recovered": "窃听成功",
+  "decrypt-failed": "解密失败",
   "recover-failed": "恢复失败",
   "start-failed": "启动失败",
   stopped: "已停止"
@@ -32,13 +34,13 @@ const phaseLabels = {
 
 const commandLabels = {
   runProtectionTest: "防护功能测试",
-  runPerformanceTest: "TLB 完整采集",
+  runPerformanceTest: "TLB 性能采集",
   runPerfCoremark: "CoreMark 基准测试",
   runPerfProc: "进程上下文切换压力测试",
   runPerfThread: "线程上下文切换压力测试",
   runPerfConcurrent: "Hackbench 并发调度压力测试",
-  runCacheEffectiveness: "Cache 防护有效性测试",
-  runCacheSecurity: "Cache 安全性测试",
+  runCacheEffectiveness: "Cache 性能采集",
+  runCacheSecurity: "Cache 安全采集",
   runCacheAllRounds: "Cache 完整采集"
 };
 
@@ -805,8 +807,8 @@ function currentTarget() {
 
 function targetKindLabel(target) {
   if (!target) return "--";
-  if (target.kind === "remote-wsl") return "远程 WSL";
-  if (target.protection === "cache") return "远程 WSL";
+  if (target.kind === "remote-wsl") return "FPGA SSH";
+  if (target.protection === "cache") return "FPGA SSH";
   if (target.protection === "tlb") return "FPGA SSH";
   return target.kind || "SSH";
 }
@@ -819,38 +821,54 @@ function protectionLabel(target) {
 }
 
 function renderTargets() {
-  $("#targetSelect").innerHTML = state.targets
+  const select = $("#targetSelect");
+  const previousValue = select.value;
+  select.innerHTML = state.targets
     .map((target) => `<option value="${escapeHtml(target.name)}">${escapeHtml(target.label || target.name)}</option>`)
     .join("");
-  renderConnectionCards();
+  if (state.targets.some((target) => target.name === previousValue)) select.value = previousValue;
+  renderTargetEditor();
   renderOverview();
 }
 
-function targetByProtection(protection) {
-  return state.targets.find((target) => target.protection === protection);
+function selectedTarget() {
+  const targetName = $("#targetSelect")?.value;
+  return state.targets.find((target) => target.name === targetName) || null;
 }
 
-function setMeta(prefix, target) {
-  $(`#${prefix}Host`).textContent = target?.host || "--";
-  $(`#${prefix}Port`).textContent = String(target?.port || "--");
-  $(`#${prefix}User`).textContent = target?.username || "--";
-  $(`#${prefix}Workdir`).textContent = target?.workingDirectory || "~";
+function renderTargetEditor() {
+  const target = selectedTarget();
+  if (!target) return;
+  $("#targetLabelInput").value = target.label || target.name;
+  $("#targetHostInput").value = target.host || "";
+  $("#targetPortInput").value = target.port || 22;
+  $("#targetUsernameInput").value = target.username || "";
+  $("#targetPasswordInput").value = "";
+  $("#targetWorkdirInput").value = target.workingDirectory || "";
+  $("#targetPasswordInput").placeholder = target.usesPassword ? "留空则保留原密码" : "请输入 SSH 密码";
 }
 
-function renderConnectionCards() {
-  const active = currentTarget();
-  const connected = Boolean(state.sshSession?.connected);
-  const cache = targetByProtection("cache");
-  const tlb = targetByProtection("tlb");
+function targetConfigPayload() {
+  return {
+    targetName: $("#targetSelect").value,
+    label: $("#targetLabelInput").value,
+    host: $("#targetHostInput").value,
+    port: $("#targetPortInput").value,
+    username: $("#targetUsernameInput").value,
+    password: $("#targetPasswordInput").value,
+    workingDirectory: $("#targetWorkdirInput").value
+  };
+}
 
-  setMeta("cache", cache);
-  setMeta("tlb", tlb);
-
-  const activeProtection = connected ? active?.protection : null;
-  setBadge($("#cacheConnectionState"), activeProtection === "cache" ? "good" : "idle", activeProtection === "cache" ? "已连接" : "未连接");
-  setBadge($("#tlbConnectionState"), activeProtection === "tlb" ? "good" : "idle", activeProtection === "tlb" ? "已连接" : "未连接");
-  $("#cacheConnectionCard")?.classList.toggle("active-target", activeProtection === "cache");
-  $("#tlbConnectionCard")?.classList.toggle("active-target", activeProtection === "tlb");
+async function saveTargetConfig() {
+  const selectedName = $("#targetSelect").value;
+  const payload = await apiPost("/api/fpga/targets/update", targetConfigPayload());
+  state.targets = payload.targets || state.targets;
+  renderTargets();
+  $("#targetSelect").value = selectedName;
+  renderTargetEditor();
+  if (payload.session) setStatus(payload.session);
+  return payload;
 }
 
 function setStatus(session = {}) {
@@ -861,9 +879,43 @@ function setStatus(session = {}) {
   setPill($("#sshStatus"), connected ? "online" : "offline", label);
   $("#sideStatus").textContent = connected ? protectionLabel(target) : "未连接";
   setBadge($("#sshBadge"), connected ? "good" : "muted", connected ? "已连接" : "未连接");
-  renderConnectionCards();
+  renderConnectionAction();
   renderProtectedState();
   renderOverview();
+}
+
+function renderConnectionAction() {
+  const button = $("#connectBtn");
+  if (!button) return;
+  const connected = Boolean(state.sshSession?.connected);
+  const connecting = state.sshSession?.status === "connecting";
+  button.className = `btn ${connected ? "danger-soft" : "primary"}`;
+  button.textContent = connected ? "断开连接" : connecting ? "连接中..." : "保存并连接";
+  button.disabled = connecting;
+}
+
+async function toggleConnection() {
+  if (state.sshSession?.connected) {
+    setStatus(await apiPost("/api/fpga/ssh/disconnect"));
+    toast("当前连接已断开");
+    return;
+  }
+
+  const targetName = $("#targetSelect").value;
+  await saveTargetConfig();
+  const session = await apiPost("/api/fpga/ssh/connect", { targetName });
+  setStatus(session);
+  toast(session.connected ? "目标已连接" : "连接请求已发送");
+}
+
+async function switchConnectionTarget() {
+  const session = state.sshSession;
+  const hasActiveSession = session?.target && !["idle", "closed"].includes(session.status);
+  if (hasActiveSession) {
+    setStatus(await apiPost("/api/fpga/ssh/disconnect"));
+    toast("已断开原目标");
+  }
+  renderTargetEditor();
 }
 
 function renderOverview() {
@@ -893,19 +945,25 @@ function renderProtectedState() {
   const collecting = state.latestResult?.status === "running";
   $("#protectedActiveTarget").textContent = connected ? `${target?.label || target?.name} / ${target?.host}` : "未连接";
   $("#protectedConnectionKind").textContent = connected ? targetKindLabel(target) : "--";
-  $("#activeTargetNote").textContent = connected
-    ? `当前会话连接到 ${target?.label || target?.name}，可手动输入命令或使用一键采集。`
-    : "请先在连接页连接一个目标。";
   $("#terminalInput").disabled = !connected;
   $("#terminalForm button[type='submit']").disabled = !connected;
-  $("#runTlbAllBtn").disabled = !connected || protection !== "tlb" || collecting;
-  $("#runCacheAllBtn").disabled = !connected || protection !== "cache" || collecting;
-  $("#runTlbAllBtn").textContent = collecting && state.latestResult?.commandKey === "runPerformanceTest"
-    ? "TLB 采集中..."
-    : "一键采集 TLB";
-  $("#runCacheAllBtn").textContent = collecting && state.latestResult?.commandKey === "runCacheAllRounds"
-    ? "Cache 采集中..."
-    : "一键采集 Cache";
+  const targetName = protection === "cache" ? "Cache" : protection === "tlb" ? "TLB" : "设备";
+  const securityKey = protection === "cache" ? "runCacheSecurity" : "runProtectionTest";
+  const performanceKey = protection === "cache" ? "runCacheEffectiveness" : "runPerformanceTest";
+  $("#runSecurityBtn").disabled = !connected || collecting;
+  $("#runPerformanceBtn").disabled = !connected || collecting;
+  $("#runSecurityBtn").textContent = collecting && state.latestResult?.commandKey === securityKey
+    ? `${targetName} 安全采集中...`
+    : `采集 ${targetName} 安全结果`;
+  $("#runPerformanceBtn").textContent = collecting && state.latestResult?.commandKey === performanceKey
+    ? `${targetName} 性能采集中...`
+    : `采集 ${targetName} 性能结果`;
+}
+
+function collectionCommandKey(category) {
+  const protection = currentTarget()?.protection;
+  if (category === "security") return protection === "cache" ? "runCacheSecurity" : "runProtectionTest";
+  return protection === "cache" ? "runCacheEffectiveness" : "runPerformanceTest";
 }
 
 function setTimelineDone(step, done) {
@@ -946,17 +1004,18 @@ function renderUnprotectedStatus(session = {}) {
   $("#eavesdropBtn").disabled = !active;
   $("#stopUnprotectedBtn").disabled = !running;
 
-  const statusClass = phase.endsWith("failed") ? "offline" : session.eveReady ? "done" : "idle";
-  setPill($("#unprotectedStatus"), statusClass, `POC ${phaseText}`);
+  const failed = phase.endsWith("failed") || phase === "key-mismatch";
+  const statusClass = failed ? "offline" : session.eveReady ? "done" : "idle";
+  setPill($("#unprotectedStatus"), statusClass, `攻击 POC ${phaseText}`);
 
   const badge = $("#unprotectedPhaseBadge");
   badge.textContent = phaseText;
-  badge.className = `badge ${phase.endsWith("failed") ? "bad" : session.recoveredKey ? "done" : "idle"}`;
+  badge.className = `badge ${failed || session.recoveredKeyValid === false ? "bad" : session.recoveredKeyValid ? "done" : "idle"}`;
 
   setTimelineDone("start", active);
   setTimelineDone("send", active && Boolean(session.lastMessage));
-  setTimelineDone("recover", ["recovering", "key-recovered", "eavesdropping", "message-recovered"].includes(phase));
-  setTimelineDone("key", Boolean(session.recoveredKey));
+  setTimelineDone("recover", ["recovering", "key-recovered", "key-mismatch", "eavesdropping", "message-recovered", "decrypt-failed"].includes(phase));
+  setTimelineDone("key", session.recoveredKeyValid === true);
   setTimelineDone("eve", active && Boolean(session.eveReady));
   setTimelineDone("result", phase === "message-recovered");
   renderOverview();
@@ -1036,17 +1095,14 @@ function bindEvents() {
     button.addEventListener("click", () => setView(button.dataset.jump));
   });
 
-  $("#connectBtn").addEventListener("click", () => safeAction(async () => {
-    const session = await apiPost("/api/fpga/ssh/connect", { targetName: $("#targetSelect").value });
-    setStatus(session);
-    toast(session.connected ? "目标已连接" : "连接请求已发送");
-  }));
+  $("#targetSelect").addEventListener("change", () => safeAction(switchConnectionTarget));
 
-  $("#disconnectBtn").addEventListener("click", () => safeAction(async () => {
-    const session = await apiPost("/api/fpga/ssh/disconnect");
-    setStatus(session);
-    toast("当前连接已断开");
-  }));
+  $("#targetConfigForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    safeAction(toggleConnection);
+  });
+
+  $("#connectBtn").addEventListener("click", () => safeAction(toggleConnection));
 
   $("#startUnprotectedBtn").addEventListener("click", () => safeAction(async () => {
     const session = await apiPost("/api/unprotected/start", {
@@ -1061,7 +1117,7 @@ function bindEvents() {
     });
     renderUnprotectedStatus(session);
     renderUnprotectedLogs(session.logs);
-    toast("无防护 POC 已启动");
+    toast("攻击 POC 已启动");
   }));
 
   $("#recoverKeyBtn").addEventListener("click", () => safeAction(async () => {
@@ -1089,7 +1145,7 @@ function bindEvents() {
 
   $("#stopUnprotectedBtn").addEventListener("click", () => safeAction(async () => {
     renderUnprotectedStatus(await apiPost("/api/unprotected/stop"));
-    toast("无防护 POC 已停止");
+    toast("攻击 POC 已停止");
   }));
 
   $("#clearUnprotectedBtn").addEventListener("click", clearUnprotectedLogs);
@@ -1126,18 +1182,20 @@ function bindEvents() {
     toast("终端输出已复制");
   }));
 
-  $("#runTlbAllBtn").addEventListener("click", () => safeAction(async () => {
-    const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runPerformanceTest" });
+  $("#runSecurityBtn").addEventListener("click", () => safeAction(async () => {
+    const commandKey = collectionCommandKey("security");
+    const payload = await apiPost("/api/fpga/run/preset", { commandKey });
     setStatus(payload);
     renderResultPayload(payload);
-    toast("已开始 TLB 一键采集");
+    toast(`已开始${protectionLabel(currentTarget())}安全采集`);
   }));
 
-  $("#runCacheAllBtn").addEventListener("click", () => safeAction(async () => {
-    const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runCacheAllRounds" });
+  $("#runPerformanceBtn").addEventListener("click", () => safeAction(async () => {
+    const commandKey = collectionCommandKey("performance");
+    const payload = await apiPost("/api/fpga/run/preset", { commandKey });
     setStatus(payload);
     renderResultPayload(payload);
-    toast("已开始 Cache 一键采集");
+    toast(`已开始${protectionLabel(currentTarget())}性能采集`);
   }));
 
   $("#refreshResultBtn").addEventListener("click", () => safeAction(async () => {
@@ -1175,14 +1233,12 @@ function renderReportCharts() {
   if (cacheSection) cacheSection.hidden = protection !== "cache";
 
   if (protection === "cache") {
-    setText("#compareContextNote", "当前连接：Cache 远程 WSL，只显示 Cache 访问和跨域隔离结果。");
     buildCacheCharts(parsed.cache).forEach(drawChart);
     updateCacheReport(parsed);
     return;
   }
 
   if (protection === "tlb") {
-    setText("#compareContextNote", "当前连接：TLB 防护目标，只显示 TLB 性能结果。");
     Object.values(buildReportCharts(parsed)).forEach(drawChart);
     updateReportBadges(parsed);
     updatePerformanceSummary(parsed);
@@ -1190,8 +1246,6 @@ function renderReportCharts() {
     setBadge($("#tlbReportStatus"), parsed.process.size || parsed.thread.size || parsed.hackbench.size ? "good" : "muted", parsed.process.size || parsed.thread.size || parsed.hackbench.size ? "已有采集数据" : "等待采集");
     return;
   }
-
-  setText("#compareContextNote", "请先在连接页面选择一个测试目标。");
 }
 
 function updatePerformanceSummary(parsed) {

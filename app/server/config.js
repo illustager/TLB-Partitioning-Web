@@ -12,8 +12,8 @@ export function loadConfig() {
     appRoot,
     publicDir: path.join(appRoot, "public"),
     server: {
-      host: config.server?.host || "127.0.0.1",
-      port: Number(config.server?.port || 5177)
+      host: process.env.WEB_HOST || config.server?.host || "127.0.0.1",
+      port: Number(process.env.WEB_PORT || config.server?.port || 5177)
     },
     fpgaTargets: config.fpgaTargets || [],
     ssh: {
@@ -34,6 +34,46 @@ export function loadConfig() {
       buildOnStart: config.unprotected?.buildOnStart !== false
     }
   };
+}
+
+export function updateFpgaTarget(config, targetName, input = {}) {
+  const target = config.fpgaTargets.find((item) => item.name === targetName);
+  if (!target) throw new Error(`未知连接目标: ${targetName}`);
+
+  const updates = {
+    label: requiredText(input.label, "显示名称", 80),
+    host: requiredText(input.host, "主机/IP", 253),
+    port: validPort(input.port),
+    username: requiredText(input.username, "用户名", 80),
+    workingDirectory: requiredText(input.workingDirectory, "工作目录", 500)
+  };
+  if (/\s/.test(updates.host)) throw new Error("主机/IP 不能包含空白字符");
+  if (/\s/.test(updates.username)) throw new Error("用户名不能包含空白字符");
+  if (!updates.workingDirectory.startsWith("/")) throw new Error("工作目录必须是绝对路径");
+  if (String(input.password || "")) updates.password = String(input.password);
+
+  const raw = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  const rawTarget = raw.fpgaTargets?.find((item) => item.name === targetName);
+  if (!rawTarget) throw new Error(`配置文件中不存在连接目标: ${targetName}`);
+  Object.assign(rawTarget, updates);
+  fs.writeFileSync(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  Object.assign(target, updates);
+  return publicTarget(target);
+}
+
+function requiredText(value, label, maxLength) {
+  const text = String(value ?? "").trim();
+  if (!text) throw new Error(`${label}不能为空`);
+  if (text.length > maxLength) throw new Error(`${label}长度不能超过 ${maxLength} 个字符`);
+  return text;
+}
+
+function validPort(value) {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("端口必须是 1 到 65535 的整数");
+  }
+  return port;
 }
 
 export function publicTarget(target) {

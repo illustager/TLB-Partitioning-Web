@@ -2,8 +2,8 @@
 
 本项目是 VexRiscv Cache/TLB Partitioning 防护方案的 Web 演示与采集平台。系统包含两部分：
 
-- 无防护模式：在本机 WSL Ubuntu 中运行 `e/` 下的 app、Bob、Mallory、Eve 程序，展示密钥恢复与窃听差异。
-- 有防护模式：通过本地 Node.js 后端建立到 FPGA 板卡的 SSH 会话，手动输入板上测试命令，并按采集类型保存输出、绘制结果。
+- 攻击 POC：在本机 WSL Ubuntu 中运行 `e/` 下的 app、Bob、Mallory、Eve 程序，展示密钥恢复与窃听差异。
+- 防护采集：通过本地 Node.js 后端建立到 FPGA 板卡的 SSH 会话，执行安全与性能采集并绘制结果。
 
 `e/` 和 `vendor/Mastik/` 已作为普通文件目录提交到仓库，不需要再拉取子模块。
 
@@ -12,7 +12,7 @@
 - Windows + PowerShell
 - Node.js 18 或更高版本
 - npm
-- WSL Ubuntu，用于无防护模式
+- WSL Ubuntu，用于攻击 POC
 - WSL Ubuntu 内安装：
   - `make`
   - `gcc`
@@ -54,16 +54,16 @@ app/config/demo.config.json
 默认 FPGA 目标：
 
 ```text
-Cache 防护板：192.168.1.100
-TLB 防护板：192.168.1.50
+Cache FPGA：192.168.1.100
+TLB FPGA：192.168.1.50
 用户名：root
 密码：174044
 工作目录：/root
 ```
 
-如板卡地址、密码或工作目录不同，修改 `fpgaTargets` 中对应项。
+板卡地址、显示名称、SSH 端口、用户名、密码和工作目录可直接在 Web“连接”页面修改并保存。也可以在服务启动前修改 `fpgaTargets` 中对应项。
 
-无防护模式默认使用：
+攻击 POC 默认使用：
 
 ```json
 "unprotected": {
@@ -89,15 +89,23 @@ npm run dev
 http://127.0.0.1:5177
 ```
 
+临时覆盖监听地址或端口：
+
+```powershell
+$env:WEB_HOST="0.0.0.0"
+$env:WEB_PORT="5178"
+npm run dev
+```
+
 语法检查：
 
 ```powershell
 npm run check
 ```
 
-## 无防护模式使用流程
+## 攻击 POC 使用流程
 
-1. 打开“无防护模式”。
+1. 打开“攻击 POC”。
 2. 确认 AES Key、逻辑核和 Mallory 参数。
 3. 点击“启动实验”，后端会在 WSL Ubuntu 中编译并启动 app 和 Bob。
 4. 在 Alice 输入框发送消息。
@@ -112,23 +120,21 @@ npm run check
 - Mallory 真实 Prime+Probe 在 WSL 中可能不稳定，演示时可使用“快速演示恢复”保证流程可展示。
 - 后端会过滤 Mallory 探测阶段产生的大量 app 中间密文，避免前端日志刷屏。
 
-## 有防护模式使用流程
+## 防护采集使用流程
 
-1. 打开“有防护模式”。
-2. 在 Target 中选择 Cache 防护板或 TLB 防护板。
+1. 打开“防护采集”。
+2. 在连接页选择 Cache FPGA 或 TLB FPGA。
 3. 点击“连接 FPGA”。
-4. 在“采集类型”中选择当前要归档的记录：
-   - 防护功能测试
-   - 有防护基础性能测试
-   - 有防护进程压力测试
-   - 有防护线程压力测试
-   - 有防护并发压力测试
-5. 点击“开始采集”。
-6. 在右侧终端手动输入板上命令。
-7. 命令运行结束后点击“结束采集”。
-8. 在“实验记录”查看原始输出，在“结果对比”查看解析后的曲线。
+4. 点击“安全结果采集”或“性能结果采集”。页面会按当前连接的 TLB/Cache 类型执行对应命令。
+5. 需要补充操作时，可在右侧终端手动输入命令。
+6. 在“最近采集数据”查看绘图所需摘要，在“结果对比”查看对应目标的图表。
 
-当前前端不再自动执行预设命令，所有板上命令由用户在终端手动输入。
+命令映射：
+
+- TLB 安全：`./test_with`
+- TLB 性能：CoreMark、进程/线程上下文切换和 Hackbench
+- Cache 安全：`CACHE_RESULT_MODE=security bash ./cache_test/cache_run.sh`
+- Cache 性能：`CACHE_RESULT_MODE=effectiveness bash ./cache_test/cache_run.sh`
 
 ## 板上测试命令示例
 
@@ -175,7 +181,7 @@ app/                  Web 前端和 Node.js 后端
 app/config/           演示配置
 app/public/           前端页面、样式和脚本
 app/server/           API、SSE、SSH、WSL 进程管理
-e/                    无防护模式本机实验程序
+e/                    攻击 POC 本机实验程序
 vendor/Mastik/        Mastik 源码及当前本地构建产物
 prototype/            原型页面参考
 ```
@@ -190,7 +196,7 @@ prototype/            原型页面参考
 
 这是 WSL NAT 模式下的代理提示，通常不影响本项目本地编译和运行。
 
-### 无防护模式启动失败
+### 攻击 POC 启动失败
 
 检查：
 
@@ -206,4 +212,3 @@ prototype/            原型页面参考
 - Windows 主机是否能访问该 IP。
 - 板卡 SSH 服务是否启动。
 - 用户名、密码、工作目录是否正确。
-

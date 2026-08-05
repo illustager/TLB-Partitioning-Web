@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { timingSafeEqual } from "node:crypto";
 
 const HEX_KEY = /^[0-9a-fA-F]{32}$/;
 const CORE_LIST = /^[0-9]+(?:,[0-9]+)*$/;
@@ -33,6 +34,7 @@ export class UnprotectedSession {
       key: this.config.unprotected.defaultKey,
       recovery: this.defaultRecovery(),
       recoveredKey: null,
+      recoveredKeyValid: null,
       eveReady: false,
       lastMessage: null,
       lastCiphertext: null,
@@ -42,6 +44,9 @@ export class UnprotectedSession {
     };
     this.malloryBuffer = "";
     this.pendingAliceCiphertexts = 0;
+    this.expectedStopProcesses = new WeakSet();
+    this.eveReadyWaiter = null;
+    this.eveCapture = null;
   }
 
   snapshot() {
@@ -66,6 +71,7 @@ export class UnprotectedSession {
       key: nextKey,
       recovery,
       recoveredKey: null,
+      recoveredKeyValid: null,
       eveReady: false,
       lastMessage: null,
       lastCiphertext: null,
@@ -77,7 +83,7 @@ export class UnprotectedSession {
     this.pendingAliceCiphertexts = 0;
     this.logs = [];
     this.emitStatus();
-    this.log("system", `准备在 WSL ${this.config.unprotected.distro} 的逻辑核 ${nextCore} 启动无防护实验`);
+    this.log("system", `准备在 WSL ${this.config.unprotected.distro} 的逻辑核 ${nextCore} 启动攻击 POC`);
 
     if (this.config.unprotected.buildOnStart) {
       try {
@@ -105,7 +111,7 @@ export class UnprotectedSession {
   }
 
   async sendMessage(message) {
-    if (!this.status.running) throw new Error("无防护实验尚未启动");
+    if (!this.status.running) throw new Error("攻击 POC 尚未启动");
     const text = String(message || "").trim();
     if (!text) throw new Error("消息不能为空");
     const chunks = this.chunkMessage(text, 11);
@@ -131,11 +137,14 @@ export class UnprotectedSession {
   }
 
   recoverKey(options = {}) {
-    if (!this.status.running) throw new Error("无防护实验尚未启动");
+    if (!this.status.running) throw new Error("攻击 POC 尚未启动");
     if (this.processes.has("mallory")) throw new Error("Mallory 正在恢复密钥");
     const recovery = this.normalizeRecovery(options);
     this.status.phase = "recovering";
     this.status.recovery = recovery;
+    this.status.recoveredKey = null;
+    this.status.recoveredKeyValid = null;
+    this.status.eveReady = false;
     this.malloryBuffer = "";
     this.emitStatus();
     this.log("mallory", `启动 Prime+Probe 密钥恢复 samples=${recovery.samples} sets=${recovery.cacheSets} lineShift=${recovery.lineShift} level=${recovery.cacheLevel} start=${recovery.start} count=${recovery.count}`);
@@ -154,19 +163,30 @@ export class UnprotectedSession {
     return this.snapshot();
   }
 
-  demoRecoverKey() {
-    if (!this.status.running) throw new Error("无防护实验尚未启动");
+  async demoRecoverKey() {
+    if (!this.status.running) throw new Error("攻击 POC 尚未启动");
+    await this.stopRole("mallory");
+    await this.stopRole("eve");
     this.status.recoveredKey = this.status.key;
+    this.status.recoveredKeyValid = true;
     this.status.phase = "key-recovered";
     this.status.eveReady = false;
     this.emitStatus();
-    this.log("mallory", "快速演示恢复：使用当前实验配置密钥完成恢复，点击窃听后再展示 Eve 恢复明文");
+    this.log("mallory", "快速演示恢复：已终止正在运行的 Mallory，并使用当前实验配置密钥完成恢复");
     return this.snapshot();
   }
 
-  enableEve() {
+  async enableEve() {
     if (!this.status.recoveredKey) throw new Error("尚未恢复密钥，无法启动 Eve");
+    if (!this.keysMatch(this.status.recoveredKey, this.status.key)) {
+      throw new Error("恢复密钥校验失败，无法启动 Eve");
+    }
     const wasReady = this.status.eveReady;
+    if (!this.processes.has("eve")) {
+      const ready = this.waitForEveReady();
+      this.spawnRole("eve", `taskset -c ${this.status.core} ./eve ${this.status.recoveredKey}`);
+      await ready;
+    }
     this.status.eveReady = true;
     this.status.phase = "eavesdropping";
     this.emitStatus();
@@ -176,8 +196,8 @@ export class UnprotectedSession {
     return this.snapshot();
   }
 
-  eavesdrop() {
-    if (!this.status.running) throw new Error("无防护实验尚未启动");
+  async eavesdrop() {
+    if (!this.status.running) throw new Error("攻击 POC 尚未启动");
     if (!this.status.lastMessage && !this.status.lastCiphertext) {
       throw new Error("还没有可窃听的 Alice 通信");
     }
@@ -192,26 +212,44 @@ export class UnprotectedSession {
       return this.snapshot();
     }
 
-    const text = this.status.lastMessage || "等待下一条 Alice 消息";
-    this.enableEve();
+    if (!this.keysMatch(this.status.recoveredKey, this.status.key)) {
+      this.status.recoveredKeyValid = false;
+      this.status.eveReady = false;
+      this.status.phase = "key-mismatch";
+      this.status.lastEavesdrop = {
+        readable: false,
+        text: "恢复密钥与通信密钥不一致，无法解密"
+      };
+      this.log("eve", `密钥校验失败，拒绝将已知 Alice 明文作为窃听结果: ${this.status.recoveredKey}`);
+      this.emitStatus();
+      return this.snapshot();
+    }
+
+    const expectedText = this.status.lastMessage;
+    this.status.recoveredKeyValid = true;
+    await this.enableEve();
+    const text = await this.replayForEve(expectedText);
+    const readable = text === expectedText;
     this.status.lastEavesdrop = {
-      readable: true,
-      text
+      readable,
+      text: readable ? text : "Eve 解密输出与 Alice 原文不一致"
     };
-    this.log("eve", `使用恢复密钥窃听明文: ${text}`);
-    this.status.phase = "message-recovered";
+    this.log("eve", readable ? `使用恢复密钥解密得到明文: ${text}` : `实际解密校验失败: ${text}`);
+    this.status.phase = readable ? "message-recovered" : "decrypt-failed";
     this.emitStatus();
     return this.snapshot();
   }
 
   stop({ quiet = false } = {}) {
-    for (const child of this.processes.values()) {
+    for (const [role, child] of this.processes.entries()) {
+      this.expectedStopProcesses.add(child);
       child.kill();
     }
     this.processes.clear();
     this.status.running = false;
     this.status.phase = "stopped";
     this.status.recoveredKey = null;
+    this.status.recoveredKeyValid = null;
     this.status.eveReady = false;
     this.status.lastMessage = null;
     this.status.lastCiphertext = null;
@@ -219,8 +257,9 @@ export class UnprotectedSession {
     this.status.endedAt = nowIso();
     this.malloryBuffer = "";
     this.pendingAliceCiphertexts = 0;
+    this.rejectEveWaiters(new Error("攻击 POC 已停止"));
     if (!quiet) {
-      this.log("system", "无防护实验已停止");
+      this.log("system", "攻击 POC 已停止");
       this.emitStatus();
     }
     return this.snapshot();
@@ -235,6 +274,7 @@ export class UnprotectedSession {
     child.stdout.on("data", (chunk) => this.handleOutput(role, chunk.toString("utf8")));
     child.stderr.on("data", (chunk) => this.handleOutput(role, chunk.toString("utf8")));
     child.on("exit", (code, signal) => {
+      const expectedStop = this.expectedStopProcesses.has(child);
       this.processes.delete(role);
       const output = this.processOutput.get(role) || "";
       this.processOutput.delete(role);
@@ -242,8 +282,13 @@ export class UnprotectedSession {
       if (role === "mallory" && /Operation not supported|Cannot allocate memory/i.test(output)) {
         this.log("system", "当前 WSL 环境不支持该 cache level 的 Mastik Prime+Probe，请使用 L1");
       }
-      if (role === "mallory" && !this.status.recoveredKey) {
+      if (role === "mallory" && !expectedStop && !this.status.recoveredKey) {
         this.status.phase = "recover-failed";
+        this.emitStatus();
+      }
+      if (role === "eve" && !expectedStop) {
+        this.status.eveReady = false;
+        this.rejectEveWaiters(new Error(`Eve 已退出，code=${code ?? "null"}`));
         this.emitStatus();
       }
     });
@@ -295,9 +340,18 @@ export class UnprotectedSession {
       }
 
       this.log(role, line);
-      if (role === "eve" && !line.includes("UDP server listening")) {
-        this.status.phase = "message-recovered";
-        this.emitStatus();
+      if (role === "eve") {
+        if (line.includes("UDP server listening")) {
+          this.resolveEveReady();
+        } else if (this.eveCapture && line.startsWith("A0: ")) {
+          this.eveCapture.chunks.push(line.slice(4));
+          if (this.eveCapture.chunks.length >= this.eveCapture.expectedChunks) {
+            const capture = this.eveCapture;
+            this.eveCapture = null;
+            clearTimeout(capture.timer);
+            capture.resolve(capture.chunks.join(""));
+          }
+        }
       }
     }
     if (role !== "mallory") return;
@@ -307,10 +361,111 @@ export class UnprotectedSession {
     if (!match) return;
 
     this.status.recoveredKey = match[1].toLowerCase();
+    this.status.recoveredKeyValid = this.keysMatch(this.status.recoveredKey, this.status.key);
     this.status.eveReady = false;
-    this.status.phase = "key-recovered";
+    this.status.phase = this.status.recoveredKeyValid ? "key-recovered" : "key-mismatch";
     this.emitStatus();
-    this.log("system", `Mallory 已恢复密钥: ${this.status.recoveredKey}，点击窃听后展示 Eve 恢复明文`);
+    this.log(
+      "system",
+      this.status.recoveredKeyValid
+        ? `Mallory 已恢复并校验密钥: ${this.status.recoveredKey}`
+        : `Mallory 输出的密钥校验失败: ${this.status.recoveredKey}`
+    );
+  }
+
+  async stopRole(role) {
+    const child = this.processes.get(role);
+    if (child) {
+      this.expectedStopProcesses.add(child);
+      child.kill("SIGTERM");
+      this.processes.delete(role);
+    }
+    if (role === "mallory") {
+      await this.runOnce("pkill -TERM -x mallory >/dev/null 2>&1 || true", "system");
+    }
+    if (role === "eve") {
+      await this.runOnce("pkill -TERM -x eve >/dev/null 2>&1 || true", "system");
+      this.status.eveReady = false;
+      this.rejectEveWaiters(new Error("Eve 已停止"));
+    }
+  }
+
+  waitForEveReady() {
+    if (this.status.eveReady && this.processes.has("eve")) return Promise.resolve();
+    if (this.eveReadyWaiter) return this.eveReadyWaiter.promise;
+    let resolve;
+    let reject;
+    const promise = new Promise((onResolve, onReject) => {
+      resolve = onResolve;
+      reject = onReject;
+    });
+    const timer = setTimeout(() => {
+      this.eveReadyWaiter = null;
+      reject(new Error("Eve 启动超时"));
+    }, 3000);
+    this.eveReadyWaiter = { promise, resolve, reject, timer };
+    return promise;
+  }
+
+  resolveEveReady() {
+    if (!this.eveReadyWaiter) return;
+    const waiter = this.eveReadyWaiter;
+    this.eveReadyWaiter = null;
+    clearTimeout(waiter.timer);
+    waiter.resolve();
+  }
+
+  rejectEveWaiters(error) {
+    if (this.eveReadyWaiter) {
+      const waiter = this.eveReadyWaiter;
+      this.eveReadyWaiter = null;
+      clearTimeout(waiter.timer);
+      waiter.reject(error);
+    }
+    if (this.eveCapture) {
+      const capture = this.eveCapture;
+      this.eveCapture = null;
+      clearTimeout(capture.timer);
+      capture.reject(error);
+    }
+  }
+
+  async replayForEve(message) {
+    const chunks = this.chunkMessage(message, 11);
+    let activeCapture;
+    const recovered = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.eveCapture = null;
+        reject(new Error("等待 Eve 解密输出超时"));
+      }, 3000);
+      activeCapture = { expectedChunks: chunks.length, chunks: [], resolve, reject, timer };
+      this.eveCapture = activeCapture;
+    });
+
+    this.log("eve", "重放上一条密文并等待 Eve 实际解密输出");
+    try {
+      for (const chunk of chunks) {
+        const wireText = `A0: ${chunk}`;
+        const payload = Buffer.alloc(16);
+        payload.write(wireText, 0, "utf8");
+        const hex = payload.toString("hex");
+        await this.runOnce(
+          `python3 -c "import binascii,socket; data=binascii.unhexlify('${hex}'); s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.sendto(data,('127.0.0.1',${this.config.unprotected.appPort})); s.close()"`,
+          "alice"
+        );
+      }
+    } catch (error) {
+      if (this.eveCapture === activeCapture) this.eveCapture = null;
+      clearTimeout(activeCapture.timer);
+      activeCapture.resolve("");
+      throw error;
+    }
+    return recovered;
+  }
+
+  keysMatch(left, right) {
+    if (!HEX_KEY.test(left || "") || !HEX_KEY.test(right || "")) return false;
+    return timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
   }
 
   log(role, text) {

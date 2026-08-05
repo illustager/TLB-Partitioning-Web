@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { loadConfig, publicTarget } from "./config.js";
+import { loadConfig, publicTarget, updateFpgaTarget } from "./config.js";
 import { SseHub } from "./sseHub.js";
 import { SshSession } from "./sshSession.js";
 import { UnprotectedSession } from "./unprotectedSession.js";
@@ -65,17 +65,17 @@ async function routeApi(request, response, url) {
     }
 
     if (request.method === "POST" && url.pathname === "/api/unprotected/demo-recover-key") {
-      sendJson(response, 200, unprotectedSession.demoRecoverKey());
+      sendJson(response, 200, await unprotectedSession.demoRecoverKey());
       return true;
     }
 
     if (request.method === "POST" && url.pathname === "/api/unprotected/enable-eve") {
-      sendJson(response, 200, unprotectedSession.enableEve());
+      sendJson(response, 200, await unprotectedSession.enableEve());
       return true;
     }
 
     if (request.method === "POST" && url.pathname === "/api/unprotected/eavesdrop") {
-      sendJson(response, 200, unprotectedSession.eavesdrop());
+      sendJson(response, 200, await unprotectedSession.eavesdrop());
       return true;
     }
 
@@ -88,6 +88,20 @@ async function routeApi(request, response, url) {
       sendJson(response, 200, {
         targets: config.fpgaTargets.map(publicTarget),
         commands: {}
+      });
+      return true;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/fpga/targets/update") {
+      const body = await readJson(request);
+      if (sshSession.target?.name === body.targetName && sshSession.status !== "closed") {
+        sshSession.disconnect();
+      }
+      const target = updateFpgaTarget(config, body.targetName, body);
+      sendJson(response, 200, {
+        target,
+        targets: config.fpgaTargets.map(publicTarget),
+        session: sshSession.snapshot()
       });
       return true;
     }

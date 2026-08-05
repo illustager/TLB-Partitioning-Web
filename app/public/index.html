@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>芯域双垒 侧信道防御系统演示平台</title>
+    <link rel="icon" href="./assets/232dad00af3d6c3f1071ad852e45e09d.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -28,15 +29,15 @@
           </button>
           <button class="nav-item" data-view="unprotected">
             <span class="nav-icon">!</span>
-            <span>无防护 POC</span>
+            <span>攻击 POC</span>
           </button>
           <button class="nav-item" data-view="protected">
             <span class="nav-icon">$</span>
-            <span>有防护 SSH</span>
+            <span>防护采集</span>
           </button>
           <button class="nav-item" data-view="compare">
             <span class="nav-icon">≋</span>
-            <span>性能结果对比</span>
+            <span>结果对比</span>
           </button>
         </nav>
 
@@ -44,7 +45,7 @@
           <span class="mini-label">演示状态</span>
           <div class="config-line"><span>后端</span><strong id="backendMini">检查中</strong></div>
           <div class="config-line"><span>当前连接</span><strong id="sideStatus">未连接</strong></div>
-          <div class="config-line"><span>POC</span><strong id="scriptStateMini">待机</strong></div>
+          <div class="config-line"><span>攻击 POC</span><strong id="scriptStateMini">待机</strong></div>
         </div>
       </aside>
 
@@ -56,7 +57,7 @@
           <div class="status-strip" aria-label="系统状态">
             <span class="status-pill idle" id="backendStatus"><i></i> 后端检查中</span>
             <span class="status-pill offline" id="sshStatus"><i></i> 远程未连接</span>
-            <span class="status-pill idle" id="unprotectedStatus"><i></i> POC 待机</span>
+            <span class="status-pill idle" id="unprotectedStatus"><i></i> 攻击 POC 待机</span>
             <span class="status-pill idle" id="resultStatus"><i></i> 结果待采集</span>
           </div>
         </header>
@@ -69,7 +70,7 @@
                 <small>侧信道防御系统演示平台</small>
               </h2>
               <p>
-                面向侧信道防御成果展示，集中呈现 Cache 与 TLB 两类隔离防护能力、在线采集流程和性能对比结果。
+                面向侧信道防御成果展示，集中呈现 Cache 与 TLB 两类隔离防护能力、在线采集流程和结果对比。
               </p>
               <div class="hero-actions">
                 <button class="btn primary" data-jump="connections">查看连接状态</button>
@@ -94,22 +95,22 @@
                 <article class="stat-card secure">
                   <span>后端桥接</span>
                   <strong id="overviewBackend">检查中</strong>
-                  <small>Node.js 负责本地 WSL POC、远程 SSH 和 SSE 事件转发。</small>
+                  <small>Node.js 负责攻击 POC、远程 SSH 和 SSE 事件转发。</small>
                 </article>
                 <article class="stat-card warn">
                   <span>当前连接</span>
                   <strong id="overviewActiveTarget">未连接</strong>
-                  <small>系统同一时间只保持一个远程会话，切换目标时自动断开旧连接。</small>
+                  <small>Cache FPGA / TLB FPGA</small>
                 </article>
                 <article class="stat-card">
-                  <span>本地无防护 POC</span>
+                  <span>攻击 POC</span>
                   <strong id="overviewScript">待机</strong>
                   <small>在本机 WSL Ubuntu 中启动 app / Bob / Mallory / Eve。</small>
                 </article>
                 <article class="stat-card danger">
                   <span>最近采集</span>
                   <strong id="overviewLastRun">暂无</strong>
-                  <small>有防护采集结果会同步进入终端、原始记录和图表区。</small>
+                  <small>防护采集结果会同步进入终端、原始记录和图表区。</small>
                 </article>
               </div>
             </section>
@@ -125,7 +126,7 @@
                 <article>
                   <span>Cache 防护</span>
                   <strong id="overviewCacheTarget">缓存侧信道隔离</strong>
-                  <p>展示缓存访问隔离策略对侧信道观测链路的削弱效果，并提供可视化性能对比。</p>
+                  <p>展示缓存访问隔离策略对侧信道观测链路的削弱效果，并提供可视化结果对比。</p>
                 </article>
                 <article>
                   <span>TLB 防护</span>
@@ -141,9 +142,7 @@
           <section class="panel connection-panel">
             <div class="panel-head">
               <div>
-                <span class="eyebrow">单活远程连接</span>
-                <h2>连接目标</h2>
-                <p class="panel-note">此页面只负责连接与断开，不显示 SSH 终端。同一时间只允许一个目标保持连接。</p>
+                <h2>连接配置</h2>
               </div>
               <span class="badge muted" id="sshBadge">未连接</span>
             </div>
@@ -154,44 +153,39 @@
                 <select id="targetSelect"></select>
               </label>
               <div class="button-row">
-                <button class="btn primary" id="connectBtn">连接选中目标</button>
-                <button class="btn ghost" id="disconnectBtn">断开当前连接</button>
+                <button class="btn primary" id="connectBtn" type="button">保存并连接</button>
               </div>
             </div>
 
-            <div class="connection-grid">
-              <article class="connection-card" id="cacheConnectionCard">
-                <div class="result-head">
-                  <div>
-                    <span class="eyebrow">Cache</span>
-                    <h3>远程 WSL 连接</h3>
-                  </div>
-                  <span class="badge idle" id="cacheConnectionState">未连接</span>
-                </div>
-                <dl class="meta-list">
-                  <div><dt>Host</dt><dd id="cacheHost">--</dd></div>
-                  <div><dt>Port</dt><dd id="cachePort">--</dd></div>
-                  <div><dt>User</dt><dd id="cacheUser">--</dd></div>
-                  <div><dt>Workdir</dt><dd id="cacheWorkdir">--</dd></div>
-                </dl>
-              </article>
+            <form class="connection-editor" id="targetConfigForm">
+              <div class="connection-config-grid">
+                <label>
+                  名称
+                  <input id="targetLabelInput" maxlength="80" autocomplete="off" />
+                </label>
+                <label class="span-2">
+                  IP
+                  <input id="targetHostInput" maxlength="253" autocomplete="off" spellcheck="false" />
+                </label>
+                <label>
+                  SSH 端口
+                  <input id="targetPortInput" type="number" min="1" max="65535" inputmode="numeric" />
+                </label>
+                <label>
+                  用户名
+                  <input id="targetUsernameInput" maxlength="80" autocomplete="username" spellcheck="false" />
+                </label>
+                <label>
+                  密码
+                  <input id="targetPasswordInput" type="password" autocomplete="current-password" placeholder="留空则保留原密码" />
+                </label>
+                <label class="span-2">
+                  远程工作目录
+                  <input id="targetWorkdirInput" maxlength="500" autocomplete="off" spellcheck="false" />
+                </label>
+              </div>
+            </form>
 
-              <article class="connection-card" id="tlbConnectionCard">
-                <div class="result-head">
-                  <div>
-                    <span class="eyebrow">TLB</span>
-                    <h3>FPGA SSH 连接</h3>
-                  </div>
-                  <span class="badge idle" id="tlbConnectionState">未连接</span>
-                </div>
-                <dl class="meta-list">
-                  <div><dt>Host</dt><dd id="tlbHost">--</dd></div>
-                  <div><dt>Port</dt><dd id="tlbPort">--</dd></div>
-                  <div><dt>User</dt><dd id="tlbUser">--</dd></div>
-                  <div><dt>Workdir</dt><dd id="tlbWorkdir">--</dd></div>
-                </dl>
-              </article>
-            </div>
           </section>
         </section>
 
@@ -199,11 +193,10 @@
           <section class="panel control-panel">
             <div class="panel-head">
               <div>
-                <span class="eyebrow">本地 WSL 实验</span>
-                <h2>无防护 POC 控制台</h2>
+                <h2>攻击 POC 控制台</h2>
               </div>
               <div class="button-row">
-                <button class="btn primary" id="startUnprotectedBtn">启动 POC</button>
+                <button class="btn primary" id="startUnprotectedBtn">启动攻击 POC</button>
                 <button class="btn danger-soft" id="recoverKeyBtn">恢复密钥</button>
                 <button class="btn ghost" id="demoRecoverKeyBtn">快速演示恢复</button>
                 <button class="btn ghost" id="eavesdropBtn">窃听</button>
@@ -310,9 +303,7 @@
             <section class="panel collection-panel">
               <div class="panel-head">
                 <div>
-                  <span class="eyebrow">有防护实验</span>
-                  <h2>数据采集</h2>
-                  <p class="panel-note" id="activeTargetNote">请先在连接页连接一个目标。</p>
+                  <h2>防护采集</h2>
                 </div>
                 <button class="btn ghost" data-jump="connections">连接页</button>
               </div>
@@ -323,8 +314,8 @@
               </div>
 
               <div class="collection-actions">
-                <button class="btn primary" id="runTlbAllBtn">一键采集 TLB</button>
-                <button class="btn primary" id="runCacheAllBtn">一键采集 Cache</button>
+                <button class="btn primary" id="runSecurityBtn">安全结果采集</button>
+                <button class="btn primary" id="runPerformanceBtn">性能结果采集</button>
               </div>
 
               <div class="artifact-list">
@@ -369,14 +360,11 @@
           <section class="panel report-panel">
             <div class="panel-head">
               <div>
-                <h2>性能测试结果</h2>
-                <p class="panel-note" id="compareContextNote">请先连接一个测试目标。</p>
+                <h2>测试结果</h2>
               </div>
             </div>
             <div class="report-empty" id="compareEmptyState">
-              <span class="eyebrow">等待连接</span>
-              <h3>连接 Cache 或 TLB 后显示对应测试结果</h3>
-              <p>同一时间只保留一个远程测试目标，切换目标后图表会同步切换。</p>
+              <h3>连接 Cache FPGA 或 TLB FPGA 后显示对应结果</h3>
             </div>
 
             <section class="report-section" id="tlbReportSection" hidden>
@@ -456,7 +444,7 @@
             <section class="report-section cache-report-section" id="cacheReportSection" hidden>
               <div class="report-context-head">
                 <div>
-                  <span class="eyebrow">Cache / 远程 WSL</span>
+                  <span class="eyebrow">Cache FPGA</span>
                   <h3>缓存访问与跨域隔离</h3>
                 </div>
                 <span class="badge muted" id="cacheReportStatus">等待采集</span>
