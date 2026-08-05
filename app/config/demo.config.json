@@ -48,7 +48,7 @@
     "checkBinary": "ls -l ./test_with ./coremark.exe ./ctxswitch_proc ./ctxswitch_thread ./hackbench_like ./test_no"
   },
   "unprotected": {
-    "distro": "Ubuntu",
+    "distro": "Ubuntu-22.04",
     "defaultCore": "0",
     "defaultKey": "00112233445566778899aabbccddeeff",
     "defaultSamples": 1000000,
