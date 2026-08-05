@@ -14,7 +14,7 @@
       "username": "root",
       "authProfile": "password",
       "password": "174044",
-      "workingDirectory": "/root"
+      "workingDirectory": "/home/ubuntu01/VexRiscv"
     },
     {
       "name": "tlb-protection-board",
@@ -39,8 +39,9 @@
     "runPerfProc": "./ctxswitch_proc -n 100 -w 50 -s; ./ctxswitch_proc -n 1000 -w 500 -s; ./ctxswitch_proc -s",
     "runPerfThread": "./ctxswitch_thread -s -n 100 -w 50; ./ctxswitch_thread -s -n 1000 -w 500; ./ctxswitch_thread -s",
     "runPerfConcurrent": "./hackbench_like -l 10 -p -s; ./hackbench_like -l 100 -p -s; ./hackbench_like -l 1000 -p -s; ./hackbench_like -l 10000 -p -s",
-    "runPerformanceTest": "./coremark.exe; ./ctxswitch_proc -n 100 -w 50 -s; ./ctxswitch_proc -n 1000 -w 500 -s; ./ctxswitch_proc -s; ./ctxswitch_thread -s -n 100 -w 50; ./ctxswitch_thread -s -n 1000 -w 500; ./ctxswitch_thread -s; ./hackbench_like -l 10 -p -s; ./hackbench_like -l 100 -p -s; ./hackbench_like -l 1000 -p -s; ./hackbench_like -l 10000 -p -s",
+    "runPerformanceTest": "./test_with; ./coremark.exe; ./ctxswitch_proc -n 100 -w 50 -s; ./ctxswitch_proc -n 1000 -w 500 -s; ./ctxswitch_proc -s; ./ctxswitch_thread -s -n 100 -w 50; ./ctxswitch_thread -s -n 1000 -w 500; ./ctxswitch_thread -s; ./hackbench_like -l 10 -p -s; ./hackbench_like -l 100 -p -s; ./hackbench_like -l 1000 -p -s; ./hackbench_like -l 10000 -p -s",
     "runTestNo": "./test_no",
+    "runCacheAllRounds": "bash ./cache_test/cache_run.sh",
     "listHome": "ls",
     "checkBinary": "ls -l ./test_with ./coremark.exe ./ctxswitch_proc ./ctxswitch_thread ./hackbench_like ./test_no"
   },

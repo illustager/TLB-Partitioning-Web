@@ -757,6 +757,114 @@ input:disabled {
   align-items: flex-start;
 }
 
+.report-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.report-panel > .panel-head {
+  margin-bottom: 0;
+}
+
+.report-section[hidden] {
+  display: none;
+}
+
+.report-section {
+  display: grid;
+  gap: 16px;
+}
+
+.report-context-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding-bottom: 2px;
+}
+
+.report-empty {
+  display: grid;
+  gap: 8px;
+  min-height: 260px;
+  align-content: center;
+  justify-items: center;
+  padding: 28px;
+  border: 1px dashed #b9c7bc;
+  border-radius: 8px;
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.report-empty[hidden] {
+  display: none;
+}
+
+.report-empty h3 {
+  font-size: 18px;
+}
+
+.report-empty p {
+  max-width: 620px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.cache-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cache-summary-item {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.cache-summary-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cache-summary-item strong {
+  min-height: 27px;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.cache-summary-item small {
+  min-height: 18px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.cache-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.cache-chart-card {
+  min-width: 0;
+  min-height: 390px;
+}
+
+.cache-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.cache-chart {
+  min-height: 330px;
+}
+
 .chart-grid,
 .performance-dashboard {
   display: grid;
@@ -990,6 +1098,7 @@ input:disabled {
   .connection-grid,
   .chart-grid,
   .performance-dashboard,
+  .cache-chart-grid,
   .trend-grid,
   .sparkline-grid,
   .unprotected-form {
@@ -1000,6 +1109,7 @@ input:disabled {
 
   .dashboard-grid,
   .compact-dashboard,
+  .cache-summary-grid,
   .performance-summary,
   .metric-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1059,7 +1169,9 @@ input:disabled {
   .metric-summary,
   .dashboard-grid,
   .compact-dashboard,
+  .cache-summary-grid,
   .performance-summary,
+  .cache-chart-grid,
   .trend-grid,
   .sparkline-grid,
   .role-grid,

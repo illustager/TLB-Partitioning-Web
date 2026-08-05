@@ -32,34 +32,26 @@ const phaseLabels = {
 
 const commandLabels = {
   runProtectionTest: "防护功能测试",
-  runPerformanceTest: "完整性能测试",
+  runPerformanceTest: "TLB 完整采集",
   runPerfCoremark: "CoreMark 基准测试",
   runPerfProc: "进程上下文切换压力测试",
   runPerfThread: "线程上下文切换压力测试",
-  runPerfConcurrent: "Hackbench 并发调度压力测试"
+  runPerfConcurrent: "Hackbench 并发调度压力测试",
+  runCacheEffectiveness: "Cache 防护有效性测试",
+  runCacheSecurity: "Cache 安全性测试",
+  runCacheAllRounds: "Cache 完整采集"
 };
 
 const chartColors = {
   unprotected: "#2b78aa",
   protected: "#dd7416",
-  missNoProtection: "#e84b40",
-  hitNoProtection: "#ef9289",
-  missProtected: "#31c976",
-  hitProtected: "#82d9a4",
-  partition: "#2b78aa"
+  partition: "#2b78aa",
+  cacheOriginal: "#e84b40",
+  cacheMitigated: "#31c976",
+  cacheSecurityEvicted: "#e84b40"
 };
 
 const fixedReportData = {
-  cacheLatency: {
-    type: "line-area",
-    selector: "#cacheLatencyChart",
-    unit: "Clock Cycles",
-    categories: ["1st", "2nd", "3rd", "4th"],
-    series: [
-      { name: "Miss 无防护", color: chartColors.missNoProtection, values: [105, 70, 60, 59] },
-      { name: "Hit 无防护", color: chartColors.hitNoProtection, values: [12, 12, 0, 12] }
-    ]
-  },
   partition: {
     type: "partition-bar",
     selector: "#coremarkChart",
@@ -128,8 +120,10 @@ function stripAnsi(value) {
 function collectResultOutputs(preferredResult = null) {
   const outputs = [];
   const seen = new Set();
+  const activeProtection = state.sshSession?.target?.protection || null;
   const push = (result) => {
     const output = stripAnsi(result?.output || "");
+    if (activeProtection && result?.protection && result.protection !== activeProtection) return;
     if (!output || seen.has(output)) return;
     seen.add(output);
     outputs.push(output);
@@ -243,14 +237,183 @@ function parseCoremarkResults(output) {
   return results;
 }
 
+const cacheMaxCycleValue = 100000n;
+
+function parseCacheCycleLine(line) {
+  const match = line.trim().match(/^(?:\[[^\]\r\n]+\]\s*)?([0-9A-Fa-f]{16})$/);
+  if (!match) return { matched: false, value: null };
+
+  const rawValue = BigInt(`0x${match[1]}`);
+  const valid = rawValue > 0n && rawValue <= cacheMaxCycleValue;
+  return { matched: true, value: valid ? Number(rawValue) : null };
+}
+
+function extractSerialHexValues(output) {
+  const values = [];
+  for (const line of stripAnsi(output).split("\n")) {
+    const parsed = parseCacheCycleLine(line);
+    if (parsed.matched) values.push(parsed.value);
+  }
+  return values;
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function aggregateCacheFrames(values, frameSize) {
+  const frameCount = Math.floor(values.length / frameSize);
+  const validFrames = [];
+
+  for (let index = 0; index < frameCount; index += 1) {
+    const frame = values.slice(index * frameSize, (index + 1) * frameSize);
+    if (frame.every((value) => Number.isFinite(value))) validFrames.push(frame);
+  }
+
+  const aggregated = Array.from({ length: frameSize }, (_, index) =>
+    median(validFrames.map((frame) => frame[index]))
+  );
+
+  return {
+    values: aggregated,
+    valid: validFrames.length > 0,
+    sampleCount: validFrames.length,
+    invalidFrameCount: frameCount - validFrames.length,
+    frameCount
+  };
+}
+
+function buildCacheMeasurement(test, values) {
+  if (test === "effectiveness") {
+    if (values.length < 8) return null;
+    const frames = aggregateCacheFrames(values, 8);
+    const times = frames.values;
+    const missValues = [times[0], times[2], times[4], times[6]];
+    const hitValues = [times[1], times[3], times[5], times[7]];
+    return {
+      ...frames,
+      times,
+      missValues,
+      hitValues,
+      avgMiss: frames.valid ? average(missValues) : null,
+      avgHit: frames.valid ? average(hitValues) : null
+    };
+  }
+
+  if (test === "security") {
+    if (values.length < 4) return null;
+    const frames = aggregateCacheFrames(values, 4);
+    const times = frames.values;
+    const domain0ReRead = times[3];
+    const isolated = frames.valid ? domain0ReRead < 30 : null;
+    return {
+      ...frames,
+      times,
+      domain0FirstRead: times[0],
+      domain1Read1: times[1],
+      domain1Read2: times[2],
+      domain0ReRead,
+      isolated,
+      verdict: isolated === null ? "invalid" : isolated ? "isolated" : "evicted"
+    };
+  }
+
+  return null;
+}
+
+function parseCacheRoundOutputs(output) {
+  const rounds = {
+    effectiveness: { original: null, mitigated: null, current: null },
+    security: { original: null, mitigated: null, current: null }
+  };
+  let current = null;
+
+  const commit = () => {
+    if (!current || !rounds[current.test]) return;
+    const measurement = buildCacheMeasurement(current.test, current.values);
+    if (measurement) rounds[current.test][current.variant] = measurement;
+    current = null;
+  };
+
+  for (const line of stripAnsi(output).split("\n")) {
+    const text = line.trim();
+    const heading = text.match(/^(effectiveness|security)\s*-\s*(original|mitigated)$/i);
+    const marker = text.match(/^CACHE_RESULT_BEGIN\s+test=(effectiveness|security)\s+variant=(original|mitigated)$/i);
+
+    if (heading || marker) {
+      commit();
+      current = {
+        test: (heading || marker)[1].toLowerCase(),
+        variant: (heading || marker)[2].toLowerCase(),
+        values: []
+      };
+      continue;
+    }
+
+    if (/^CACHE_RESULT_END$/i.test(text)) {
+      commit();
+      continue;
+    }
+
+    if (!current) continue;
+    const parsed = parseCacheCycleLine(text);
+    if (parsed.matched) current.values.push(parsed.value);
+  }
+
+  commit();
+  return rounds;
+}
+
+function selectCacheVariant(variants) {
+  return variants?.mitigated || variants?.original || variants?.current || null;
+}
+
+function parseCacheMeasurements(outputs = {}) {
+  const combined = [outputs.all, outputs.effectiveness, outputs.security]
+    .filter(Boolean)
+    .join("\n");
+  const rounds = parseCacheRoundOutputs(combined);
+
+  if (!rounds.effectiveness.original && !rounds.effectiveness.mitigated) {
+    const current = buildCacheMeasurement("effectiveness", extractSerialHexValues(outputs.effectiveness));
+    if (current) rounds.effectiveness.current = current;
+  }
+  if (!rounds.security.original && !rounds.security.mitigated) {
+    const current = buildCacheMeasurement("security", extractSerialHexValues(outputs.security));
+    if (current) rounds.security.current = current;
+  }
+
+  return rounds;
+}
+
+function activeResultOutput(commandKey) {
+  const protection = state.sshSession?.target?.protection;
+  if (!protection) return "";
+  return state.resultsByCommand?.[`${protection}:${commandKey}`]?.output || "";
+}
+
 function parseCollectedMeasurements(preferredResult = null) {
   const output = collectResultOutputs(preferredResult);
+  const cache = parseCacheMeasurements({
+    effectiveness: activeResultOutput("runCacheEffectiveness"),
+    security: activeResultOutput("runCacheSecurity"),
+    all: activeResultOutput("runCacheAllRounds")
+  });
+
   return {
     partition: parsePartitionSummaries(output),
     coremark: parseCoremarkResults(output),
     process: parseSwitchResults(output, "process"),
     thread: parseSwitchResults(output, "thread"),
-    hackbench: parseSwitchResults(output, "hackbench")
+    hackbench: parseSwitchResults(output, "hackbench"),
+    cacheEffectiveness: selectCacheVariant(cache.effectiveness),
+    cacheSecurity: selectCacheVariant(cache.security),
+    cache
   };
 }
 
@@ -288,6 +451,58 @@ function formatOverheadRange(baseline, realValues) {
   const max = Math.max(...values);
   if (Math.abs(max - min) < 0.01) return formatPercent(max);
   return `${formatPercent(min)} - ${formatPercent(max)}`;
+}
+
+const cacheEffectivenessCategories = ["D0 / W0", "D0 / W1", "D1 / W0", "D1 / W1"];
+const cacheSecurityCategories = ["D0 首次读", "D1 读 1", "D1 读 2", "D0 重读"];
+
+function cacheVariantSeries(variants, valueKey) {
+  const definitions = [
+    { key: "original", name: "无防护", color: chartColors.cacheOriginal },
+    { key: "mitigated", name: "有防护", color: chartColors.cacheMitigated },
+    { key: "current", name: "当前采集", color: chartColors.partition }
+  ];
+
+  return definitions
+    .filter(({ key }) => variants?.[key]?.valid && Array.isArray(variants[key][valueKey]))
+    .map(({ key, name, color }) => ({
+      name,
+      color,
+      values: variants[key][valueKey]
+    }));
+}
+
+function buildCacheCharts(cache) {
+  const effectiveness = cache?.effectiveness || {};
+  const security = cache?.security || {};
+  return [
+    {
+      type: "grouped-bar",
+      selector: "#cacheMissChart",
+      unit: "Clock Cycles",
+      categories: cacheEffectivenessCategories,
+      series: cacheVariantSeries(effectiveness, "missValues"),
+      emptyLabel: "等待 Cache 防护有效性采集"
+    },
+    {
+      type: "grouped-bar",
+      selector: "#cacheHitChart",
+      unit: "Clock Cycles",
+      categories: cacheEffectivenessCategories,
+      series: cacheVariantSeries(effectiveness, "hitValues"),
+      emptyLabel: "等待 Cache 防护有效性采集"
+    },
+    {
+      type: "grouped-bar",
+      selector: "#cacheSecurityChart",
+      unit: "Clock Cycles",
+      categories: cacheSecurityCategories,
+      series: cacheVariantSeries(security, "times"),
+      threshold: 30,
+      thresholdLabel: "Hit / Miss 阈值 30 cyc",
+      emptyLabel: "等待 Cache 安全性采集"
+    }
+  ];
 }
 
 function buildReportCharts(parsed = parseCollectedMeasurements()) {
@@ -332,7 +547,6 @@ function buildReportCharts(parsed = parseCollectedMeasurements()) {
   }
 
   return {
-    cacheLatency: fixedReportData.cacheLatency,
     partition: {
       type: fixedReportData.partition.type,
       selector: fixedReportData.partition.selector,
@@ -399,6 +613,81 @@ function updateReportBadges(parsed = parseCollectedMeasurements()) {
     parsed.hackbench.size ? "idle" : "muted",
     formatOverheadRange(fixedReportData.hackbench.baseline, realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline))
   );
+
+}
+
+function cacheVariantLabel(variants) {
+  if (variants?.mitigated) return "有防护";
+  if (variants?.original) return "无防护";
+  if (variants?.current) return "当前采集";
+  return "--";
+}
+
+function updateCacheReport(parsed = parseCollectedMeasurements()) {
+  const cache = parsed.cache || { effectiveness: {}, security: {} };
+  const effectiveness = selectCacheVariant(cache.effectiveness);
+  const security = selectCacheVariant(cache.security);
+  const effectivenessCount = [cache.effectiveness?.original, cache.effectiveness?.mitigated, cache.effectiveness?.current].filter(Boolean).length;
+  const securityCount = [cache.security?.original, cache.security?.mitigated, cache.security?.current].filter(Boolean).length;
+  const collectedCount = effectivenessCount + securityCount;
+  const measurements = [
+    cache.effectiveness?.original,
+    cache.effectiveness?.mitigated,
+    cache.security?.original,
+    cache.security?.mitigated
+  ].filter(Boolean);
+  const invalidCount = measurements.filter((measurement) => !measurement.valid).length;
+  const effectivenessValid = Boolean(effectiveness?.valid);
+  const securityValid = Boolean(security?.valid);
+
+  setBadge(
+    $("#cacheReportStatus"),
+    invalidCount ? "bad" : collectedCount === 4 ? "good" : collectedCount ? "idle" : "muted",
+    invalidCount
+      ? `已采集 ${collectedCount}/4 组，${invalidCount} 组异常`
+      : collectedCount
+        ? `已采集 ${collectedCount}/4 组`
+        : "等待采集"
+  );
+  setBadge(
+    $("#cacheMissBadge"),
+    !effectiveness ? "muted" : effectivenessValid ? "good" : "bad",
+    !effectiveness ? "等待采集" : effectivenessValid ? cacheVariantLabel(cache.effectiveness) : "数据异常"
+  );
+  setBadge(
+    $("#cacheHitBadge"),
+    !effectiveness ? "muted" : effectivenessValid ? "good" : "bad",
+    !effectiveness ? "等待采集" : effectivenessValid ? cacheVariantLabel(cache.effectiveness) : "数据异常"
+  );
+  setBadge(
+    $("#cacheSecurityBadge"),
+    !security ? "muted" : !securityValid ? "bad" : security.isolated ? "good" : "bad",
+    !security ? "等待采集" : !securityValid ? "数据异常" : security.isolated ? "隔离成功" : "隔离失败"
+  );
+
+  setText("#cacheMissAverage", effectivenessValid ? `${formatChartNumber(effectiveness.avgMiss)} cyc` : "--");
+  setText("#cacheHitAverage", effectivenessValid ? `${formatChartNumber(effectiveness.avgHit)} cyc` : "--");
+  setText(
+    "#cacheMissSummary",
+    effectivenessValid ? `${cacheVariantLabel(cache.effectiveness)} / ${effectiveness.sampleCount} 个有效帧` : effectiveness ? "采集值超出有效范围" : "等待有效性采集"
+  );
+  setText(
+    "#cacheHitSummary",
+    effectivenessValid ? `${cacheVariantLabel(cache.effectiveness)} / ${effectiveness.sampleCount} 个有效帧` : effectiveness ? "采集值超出有效范围" : "等待有效性采集"
+  );
+  setText("#cacheSecurityRead", securityValid ? `${formatChartNumber(security.domain0ReRead)} cyc` : "--");
+  setText(
+    "#cacheSecuritySummary",
+    securityValid ? (security.isolated ? "低于阈值，保持命中" : "达到阈值，发生驱逐") : security ? "采集值超出有效范围" : "等待安全性采集"
+  );
+  setText(
+    "#cacheVariantSummary",
+    effectivenessCount === 2 && securityCount === 2
+      ? "无防护 + 有防护"
+      : cacheVariantLabel(cache.effectiveness) !== "--"
+        ? cacheVariantLabel(cache.effectiveness)
+        : cacheVariantLabel(cache.security)
+  );
 }
 
 function summarizeLatestResult(result) {
@@ -431,6 +720,9 @@ function summarizeLatestResult(result) {
   const thread = parseSwitchResults(output, "thread");
   const hackbench = parseSwitchResults(output, "hackbench");
   const coremark = parseCoremarkResults(output);
+  const cacheRounds = parseCacheMeasurements({ effectiveness: output, security: output, all: output });
+  const cacheEff = selectCacheVariant(cacheRounds.effectiveness);
+  const cacheSec = selectCacheVariant(cacheRounds.security);
 
   const appendSwitchLines = (title, resultMap, keyLabel) => {
     if (!resultMap.size) return;
@@ -442,6 +734,23 @@ function summarizeLatestResult(result) {
       );
     });
   };
+
+  if (cacheEff?.valid) {
+    if (lines.length) lines.push("");
+    lines.push("Cache 防护有效性");
+    lines.push(`Miss 平均: ${formatChartNumber(cacheEff.avgMiss)} cyc`);
+    lines.push(`Hit  平均: ${formatChartNumber(cacheEff.avgHit)} cyc`);
+    lines.push(`Miss/Hit 比: ${cacheEff.avgHit ? (cacheEff.avgMiss / cacheEff.avgHit).toFixed(1) : "--"}x`);
+  }
+
+  if (cacheSec?.valid) {
+    if (lines.length) lines.push("");
+    lines.push("Cache 安全性 (跨域隔离)");
+    lines.push(`Domain0 首次读: ${formatChartNumber(cacheSec.domain0FirstRead)} cyc (Miss)`);
+    lines.push(`Domain1 读1:    ${formatChartNumber(cacheSec.domain1Read1)} cyc (Miss)`);
+    lines.push(`Domain1 读2:    ${formatChartNumber(cacheSec.domain1Read2)} cyc (Miss)`);
+    lines.push(`Domain0 重读:   ${formatChartNumber(cacheSec.domain0ReRead)} cyc → ${cacheSec.isolated ? "隔离成功 (Hit)" : "隔离失败 (被驱逐)"}`);
+  }
 
   if (coremark.length) {
     if (lines.length) lines.push("");
@@ -580,6 +889,8 @@ function renderOverview() {
 function renderProtectedState() {
   const connected = Boolean(state.sshSession?.connected);
   const target = currentTarget();
+  const protection = connected ? target?.protection : null;
+  const collecting = state.latestResult?.status === "running";
   $("#protectedActiveTarget").textContent = connected ? `${target?.label || target?.name} / ${target?.host}` : "未连接";
   $("#protectedConnectionKind").textContent = connected ? targetKindLabel(target) : "--";
   $("#activeTargetNote").textContent = connected
@@ -587,9 +898,14 @@ function renderProtectedState() {
     : "请先在连接页连接一个目标。";
   $("#terminalInput").disabled = !connected;
   $("#terminalForm button[type='submit']").disabled = !connected;
-  $("#runProtectionBtn").disabled = !connected;
-  $("#runPerformanceBtn").disabled = !connected;
-  $("#markCompleteBtn").disabled = !connected || state.latestResult?.status !== "running";
+  $("#runTlbAllBtn").disabled = !connected || protection !== "tlb" || collecting;
+  $("#runCacheAllBtn").disabled = !connected || protection !== "cache" || collecting;
+  $("#runTlbAllBtn").textContent = collecting && state.latestResult?.commandKey === "runPerformanceTest"
+    ? "TLB 采集中..."
+    : "一键采集 TLB";
+  $("#runCacheAllBtn").textContent = collecting && state.latestResult?.commandKey === "runCacheAllRounds"
+    ? "Cache 采集中..."
+    : "一键采集 Cache";
 }
 
 function setTimelineDone(step, done) {
@@ -679,6 +995,8 @@ function getStatusMeta(status) {
   const statusMeta = {
     running: { label: "结果采集中", className: "idle" },
     captured: { label: "结果已采集", className: "done" },
+    interrupted: { label: "采集已中断", className: "bad" },
+    failed: { label: "采集失败", className: "bad" },
     idle: { label: "结果待采集", className: "idle" }
   };
   return statusMeta[status || "idle"] || { label: status, className: "idle" };
@@ -808,24 +1126,18 @@ function bindEvents() {
     toast("终端输出已复制");
   }));
 
-  $("#runProtectionBtn").addEventListener("click", () => safeAction(async () => {
-    const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runProtectionTest" });
-    setStatus(payload);
-    renderResultPayload(payload);
-    toast("已开始防护功能测试采集");
-  }));
-
-  $("#runPerformanceBtn").addEventListener("click", () => safeAction(async () => {
+  $("#runTlbAllBtn").addEventListener("click", () => safeAction(async () => {
     const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runPerformanceTest" });
     setStatus(payload);
     renderResultPayload(payload);
-    toast("已开始完整性能测试采集");
+    toast("已开始 TLB 一键采集");
   }));
 
-  $("#markCompleteBtn").addEventListener("click", () => safeAction(async () => {
-    const result = await apiPost("/api/fpga/results/mark-complete");
-    renderResultPayload(result);
-    toast("当前采集已结束");
+  $("#runCacheAllBtn").addEventListener("click", () => safeAction(async () => {
+    const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runCacheAllRounds" });
+    setStatus(payload);
+    renderResultPayload(payload);
+    toast("已开始 Cache 一键采集");
   }));
 
   $("#refreshResultBtn").addEventListener("click", () => safeAction(async () => {
@@ -852,10 +1164,34 @@ function bindEventSource() {
 
 function renderReportCharts() {
   const parsed = parseCollectedMeasurements();
-  Object.values(buildReportCharts(parsed)).forEach(drawChart);
-  updateReportBadges(parsed);
-  updatePerformanceSummary(parsed);
-  drawOverheadRings(parsed);
+  const connected = Boolean(state.sshSession?.connected);
+  const protection = connected ? currentTarget()?.protection : null;
+  const empty = $("#compareEmptyState");
+  const tlbSection = $("#tlbReportSection");
+  const cacheSection = $("#cacheReportSection");
+
+  if (empty) empty.hidden = Boolean(protection);
+  if (tlbSection) tlbSection.hidden = protection !== "tlb";
+  if (cacheSection) cacheSection.hidden = protection !== "cache";
+
+  if (protection === "cache") {
+    setText("#compareContextNote", "当前连接：Cache 远程 WSL，只显示 Cache 访问和跨域隔离结果。");
+    buildCacheCharts(parsed.cache).forEach(drawChart);
+    updateCacheReport(parsed);
+    return;
+  }
+
+  if (protection === "tlb") {
+    setText("#compareContextNote", "当前连接：TLB 防护目标，只显示 TLB 性能结果。");
+    Object.values(buildReportCharts(parsed)).forEach(drawChart);
+    updateReportBadges(parsed);
+    updatePerformanceSummary(parsed);
+    drawOverheadRings(parsed);
+    setBadge($("#tlbReportStatus"), parsed.process.size || parsed.thread.size || parsed.hackbench.size ? "good" : "muted", parsed.process.size || parsed.thread.size || parsed.hackbench.size ? "已有采集数据" : "等待采集");
+    return;
+  }
+
+  setText("#compareContextNote", "请先在连接页面选择一个测试目标。");
 }
 
 function updatePerformanceSummary(parsed) {
@@ -1014,7 +1350,8 @@ function createChartContext(config, options = {}) {
   if (!svg) return null;
 
   const ns = "http://www.w3.org/2000/svg";
-  const viewBox = svg.getAttribute("viewBox").split(/\s+/).map(Number);
+  const viewBoxValue = svg.getAttribute("viewBox");
+  const viewBox = viewBoxValue.split(/\s+/).map(Number);
   const width = viewBox[2];
   const height = viewBox[3];
   const padding = options.padding || { top: 62, right: 24, bottom: 58, left: 64 };
@@ -1409,7 +1746,7 @@ function drawGroupedBarChart(config) {
   if (!ctx) return;
 
   const values = config.series.flatMap((item) => item.values).filter((value) => Number.isFinite(value));
-  const maxValue = Math.max(1, ...values) * 1.18;
+  const maxValue = Math.max(1, ...values, Number.isFinite(config.threshold) ? config.threshold : 0) * 1.18;
   const minValue = 0;
   const categoryWidth = ctx.plotWidth / config.categories.length;
   const barGap = 5;
@@ -1418,6 +1755,27 @@ function drawGroupedBarChart(config) {
   const barWidth = Math.max(7, (categoryWidth - groupPadding * 2 - barGap * (seriesCount - 1)) / seriesCount);
 
   drawGrid(ctx, config.unit, minValue, maxValue);
+
+  if (Number.isFinite(config.threshold)) {
+    const thresholdY = valueToY(ctx, config.threshold, minValue, maxValue);
+    ctx.add("line", {
+      x1: ctx.padding.left,
+      y1: thresholdY,
+      x2: ctx.width - ctx.padding.right,
+      y2: thresholdY,
+      stroke: chartColors.cacheSecurityEvicted,
+      "stroke-width": 1.5,
+      "stroke-dasharray": "6 5"
+    });
+    ctx.add("text", {
+      x: ctx.width - ctx.padding.right,
+      y: thresholdY - 7,
+      "text-anchor": "end",
+      fill: chartColors.cacheSecurityEvicted,
+      "font-size": 11,
+      "font-weight": 800
+    }, config.thresholdLabel || formatChartNumber(config.threshold));
+  }
 
   config.categories.forEach((category, categoryIndex) => {
     const groupX = ctx.padding.left + categoryIndex * categoryWidth;
@@ -1439,6 +1797,17 @@ function drawGroupedBarChart(config) {
       "font-weight": 700
     }, category);
   });
+
+  if (!config.series.length) {
+    ctx.add("text", {
+      x: ctx.width / 2,
+      y: ctx.padding.top + ctx.plotHeight / 2,
+      "text-anchor": "middle",
+      fill: "#657064",
+      "font-size": 14,
+      "font-weight": 800
+    }, config.emptyLabel || "等待采集");
+  }
 
   drawLegend(ctx, config.series);
 }

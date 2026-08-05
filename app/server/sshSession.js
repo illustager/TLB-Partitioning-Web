@@ -33,6 +33,9 @@ export class SshSession {
     this.target = null;
     this.status = "idle";
     this.activeResultKey = null;
+    this.activeCompletionMarker = null;
+    this.completionScanTail = "";
+    this.resultSequence = 0;
     this.latestResult = emptyResult();
     this.resultsByCommand = {};
     for (const target of this.config.fpgaTargets) {
@@ -113,6 +116,7 @@ export class SshSession {
         });
 
         stream.on("close", () => {
+          this.closeActiveResult("interrupted");
           this.status = "closed";
           this.shell = null;
           this.hub.emit("terminal", { stream: "system", text: `\n[${nowIso()}] SSH shell closed\n` });
@@ -123,6 +127,7 @@ export class SshSession {
 
     client.on("error", (error) => this.fail(error));
     client.on("close", () => {
+      this.closeActiveResult("interrupted");
       this.client = null;
       this.shell = null;
       if (this.status !== "failed") this.status = "closed";
@@ -142,12 +147,14 @@ export class SshSession {
   }
 
   fail(error) {
+    this.closeActiveResult("failed");
     this.status = "failed";
     this.hub.emit("terminal", { stream: "system", text: `[ssh error] ${error.message}\n` });
     this.hub.emit("status", this.snapshot());
   }
 
   disconnect(emit = true) {
+    this.closeActiveResult("interrupted");
     if (emit) {
       this.hub.emit("terminal", { stream: "system", text: "\n[system] disconnect requested\n" });
     }
@@ -205,10 +212,15 @@ export class SshSession {
       output: ""
     };
     this.activeResultKey = key;
+    this.resultSequence += 1;
+    const markerSuffix = `DONE_${Date.now()}_${this.resultSequence}__`;
+    this.activeCompletionMarker = `__WEB_RESULT_${markerSuffix}`;
+    this.completionScanTail = "";
     this.latestResult = result;
     this.resultsByCommand[key] = result;
     this.emitResult(result);
-    this.shell.write(`${fullCommand}\n`);
+    const wrappedCommand = `{ ${fullCommand}; }; __web_result_status=$?; printf '\\n%s%s\\n' '__WEB_RESULT_' '${markerSuffix}'`;
+    this.shell.write(`${wrappedCommand}\n`);
     this.hub.emit("terminal", { stream: "stdin", text: `$ ${fullCommand}\n` });
     return this.snapshot();
   }
@@ -232,6 +244,8 @@ export class SshSession {
       output: ""
     };
     this.activeResultKey = key;
+    this.activeCompletionMarker = null;
+    this.completionScanTail = "";
     this.latestResult = result;
     this.resultsByCommand[key] = result;
     this.emitResult(result);
@@ -243,8 +257,20 @@ export class SshSession {
     const result = this.activeResultKey ? this.resultsByCommand[this.activeResultKey] : null;
     if (result?.status === "running") {
       result.output += text;
+      const scanText = this.completionScanTail + text;
+      const completed = Boolean(this.activeCompletionMarker && scanText.includes(this.activeCompletionMarker));
       if (result.output.length > 30000) {
         result.output = result.output.slice(-30000);
+      }
+      if (completed) {
+        result.output = result.output.replace(this.activeCompletionMarker, "");
+        result.status = "captured";
+        result.endedAt = nowIso();
+        this.activeResultKey = null;
+        this.activeCompletionMarker = null;
+        this.completionScanTail = "";
+      } else if (this.activeCompletionMarker) {
+        this.completionScanTail = scanText.slice(-(this.activeCompletionMarker.length - 1));
       }
       this.latestResult = result;
       this.emitResult(result);
@@ -259,19 +285,23 @@ export class SshSession {
       this.latestResult = result;
       this.emitResult(result);
       this.activeResultKey = null;
+      this.activeCompletionMarker = null;
+      this.completionScanTail = "";
     }
     return this.latestResult;
   }
 
-  closeActiveResult() {
+  closeActiveResult(status = "captured") {
     const result = this.activeResultKey ? this.resultsByCommand[this.activeResultKey] : null;
     if (result?.status === "running") {
-      result.status = "captured";
+      result.status = status;
       result.endedAt = nowIso();
       this.latestResult = result;
       this.emitResult(result);
     }
     this.activeResultKey = null;
+    this.activeCompletionMarker = null;
+    this.completionScanTail = "";
   }
 
   emitResult(result) {
@@ -294,7 +324,10 @@ export class SshSession {
       "runPerfThread",
       "runPerfConcurrent",
       "runTestWith",
-      "runTestNo"
+      "runTestNo",
+      "runCacheEffectiveness",
+      "runCacheSecurity",
+      "runCacheAllRounds"
     ];
   }
 

@@ -323,9 +323,8 @@
               </div>
 
               <div class="collection-actions">
-                <button class="btn primary" id="runProtectionBtn">一键采集防护功能测试</button>
-                <button class="btn primary" id="runPerformanceBtn">一键采集完整性能测试</button>
-                <button class="btn ghost" id="markCompleteBtn">结束当前采集</button>
+                <button class="btn primary" id="runTlbAllBtn">一键采集 TLB</button>
+                <button class="btn primary" id="runCacheAllBtn">一键采集 Cache</button>
               </div>
 
               <div class="artifact-list">
@@ -367,87 +366,160 @@
         </section>
 
         <section class="view" id="compare">
-          <section class="panel">
+          <section class="panel report-panel">
             <div class="panel-head">
               <div>
                 <h2>性能测试结果</h2>
+                <p class="panel-note" id="compareContextNote">请先连接一个测试目标。</p>
               </div>
             </div>
-            <div class="performance-dashboard">
-              <article class="chart-card partition-dashboard-card">
-                <div class="result-head">
-                  <div>
-                    <span class="eyebrow">Hackbench</span>
-                    <h3>并发调度压力</h3>
-                  </div>
-                  <span class="badge idle" id="hackbenchOverheadBadge">等待采集</span>
-                </div>
-                <svg class="bar-chart dashboard-main-chart" id="hackbenchChart" viewBox="0 0 680 330" role="img" aria-label="Hackbench 并发调度压力测试"></svg>
-              </article>
+            <div class="report-empty" id="compareEmptyState">
+              <span class="eyebrow">等待连接</span>
+              <h3>连接 Cache 或 TLB 后显示对应测试结果</h3>
+              <p>同一时间只保留一个远程测试目标，切换目标后图表会同步切换。</p>
+            </div>
 
-              <article class="chart-card overhead-dashboard-card">
-                <div class="result-head">
-                  <div>
-                    <span class="eyebrow">Overhead</span>
-                    <h3>开销指标</h3>
-                  </div>
+            <section class="report-section" id="tlbReportSection" hidden>
+              <div class="report-context-head">
+                <div>
+                  <span class="eyebrow">TLB</span>
+                  <h3>地址转换分区性能</h3>
                 </div>
-                <div class="ring-grid">
-                  <article class="ring-card">
-                    <svg id="processRingChart" viewBox="0 0 160 160" aria-label="进程切换开销"></svg>
-                    <span>进程切换</span>
-                    <strong id="summaryProcessValue">等待采集</strong>
-                    <small id="summaryProcessNote">采集后显示开销范围</small>
-                  </article>
-                  <article class="ring-card">
-                    <svg id="threadRingChart" viewBox="0 0 160 160" aria-label="线程切换开销"></svg>
-                    <span>线程切换</span>
-                    <strong id="summaryThreadValue">等待采集</strong>
-                    <small id="summaryThreadNote">采集后显示开销范围</small>
-                  </article>
-                  <article class="ring-card">
-                    <svg id="hackbenchRingChart" viewBox="0 0 160 160" aria-label="并发调度开销"></svg>
-                    <span>并发调度</span>
-                    <strong id="summaryHackbenchValue">等待采集</strong>
-                    <small id="summaryHackbenchNote">采集后显示开销范围</small>
-                  </article>
-                </div>
-              </article>
-
-              <article class="chart-card cache-dashboard-card">
-                <div class="result-head">
-                  <div>
-                    <span class="eyebrow">Cache</span>
-                    <h3>Hit / Miss 访问周期</h3>
-                  </div>
-                  <span class="badge muted">无防护基线</span>
-                </div>
-                <svg class="bar-chart cache-dashboard-chart" id="cacheLatencyChart" viewBox="0 0 760 260" role="img" aria-label="Cache Hit Miss 访问周期"></svg>
-              </article>
-
-              <div class="trend-grid">
-                <article class="chart-card trend-card">
+                <span class="badge idle" id="tlbReportStatus">等待采集</span>
+              </div>
+              <div class="performance-dashboard">
+                <article class="chart-card partition-dashboard-card">
                   <div class="result-head">
                     <div>
-                      <span class="eyebrow">Process</span>
-                      <h3>进程上下文切换</h3>
+                      <span class="eyebrow">Hackbench</span>
+                      <h3>并发调度压力</h3>
                     </div>
-                    <span class="badge idle" id="processOverheadBadge">等待采集</span>
+                    <span class="badge idle" id="hackbenchOverheadBadge">等待采集</span>
                   </div>
-                  <svg class="bar-chart trend-chart" id="processSwitchChart" viewBox="0 0 760 320" role="img" aria-label="进程上下文切换压力测试"></svg>
+                  <svg class="bar-chart dashboard-main-chart" id="hackbenchChart" viewBox="0 0 680 330" role="img" aria-label="Hackbench 并发调度压力测试"></svg>
                 </article>
-                <article class="chart-card trend-card">
+
+                <article class="chart-card overhead-dashboard-card">
                   <div class="result-head">
                     <div>
-                      <span class="eyebrow">Thread</span>
-                      <h3>线程上下文切换</h3>
+                      <span class="eyebrow">Overhead</span>
+                      <h3>开销指标</h3>
                     </div>
-                    <span class="badge muted" id="threadOverheadBadge">等待采集</span>
                   </div>
-                  <svg class="bar-chart trend-chart" id="threadSwitchChart" viewBox="0 0 760 320" role="img" aria-label="线程上下文切换压力测试"></svg>
+                  <div class="ring-grid">
+                    <article class="ring-card">
+                      <svg id="processRingChart" viewBox="0 0 160 160" aria-label="进程切换开销"></svg>
+                      <span>进程切换</span>
+                      <strong id="summaryProcessValue">等待采集</strong>
+                      <small id="summaryProcessNote">采集后显示开销范围</small>
+                    </article>
+                    <article class="ring-card">
+                      <svg id="threadRingChart" viewBox="0 0 160 160" aria-label="线程切换开销"></svg>
+                      <span>线程切换</span>
+                      <strong id="summaryThreadValue">等待采集</strong>
+                      <small id="summaryThreadNote">采集后显示开销范围</small>
+                    </article>
+                    <article class="ring-card">
+                      <svg id="hackbenchRingChart" viewBox="0 0 160 160" aria-label="并发调度开销"></svg>
+                      <span>并发调度</span>
+                      <strong id="summaryHackbenchValue">等待采集</strong>
+                      <small id="summaryHackbenchNote">采集后显示开销范围</small>
+                    </article>
+                  </div>
+                </article>
+
+                <div class="trend-grid">
+                  <article class="chart-card trend-card">
+                    <div class="result-head">
+                      <div>
+                        <span class="eyebrow">Process</span>
+                        <h3>进程上下文切换</h3>
+                      </div>
+                      <span class="badge idle" id="processOverheadBadge">等待采集</span>
+                    </div>
+                    <svg class="bar-chart trend-chart" id="processSwitchChart" viewBox="0 0 760 320" role="img" aria-label="进程上下文切换压力测试"></svg>
+                  </article>
+                  <article class="chart-card trend-card">
+                    <div class="result-head">
+                      <div>
+                        <span class="eyebrow">Thread</span>
+                        <h3>线程上下文切换</h3>
+                      </div>
+                      <span class="badge muted" id="threadOverheadBadge">等待采集</span>
+                    </div>
+                    <svg class="bar-chart trend-chart" id="threadSwitchChart" viewBox="0 0 760 320" role="img" aria-label="线程上下文切换压力测试"></svg>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section class="report-section cache-report-section" id="cacheReportSection" hidden>
+              <div class="report-context-head">
+                <div>
+                  <span class="eyebrow">Cache / 远程 WSL</span>
+                  <h3>缓存访问与跨域隔离</h3>
+                </div>
+                <span class="badge muted" id="cacheReportStatus">等待采集</span>
+              </div>
+
+              <div class="cache-summary-grid">
+                <article class="cache-summary-item">
+                  <span>Miss 平均</span>
+                  <strong id="cacheMissAverage">--</strong>
+                  <small id="cacheMissSummary">Clock Cycles</small>
+                </article>
+                <article class="cache-summary-item">
+                  <span>Hit 平均</span>
+                  <strong id="cacheHitAverage">--</strong>
+                  <small id="cacheHitSummary">Clock Cycles</small>
+                </article>
+                <article class="cache-summary-item">
+                  <span>Domain0 重读</span>
+                  <strong id="cacheSecurityRead">--</strong>
+                  <small id="cacheSecuritySummary">等待安全性采集</small>
+                </article>
+                <article class="cache-summary-item">
+                  <span>当前数据版本</span>
+                  <strong id="cacheVariantSummary">--</strong>
+                  <small>原始版 / 防护版</small>
                 </article>
               </div>
-            </div>
+
+              <div class="cache-chart-grid">
+                <article class="chart-card cache-chart-card">
+                  <div class="result-head">
+                    <div>
+                      <span class="eyebrow">Effectiveness</span>
+                      <h3>Cache Miss 访问周期</h3>
+                    </div>
+                    <span class="badge muted" id="cacheMissBadge">等待采集</span>
+                  </div>
+                  <svg class="bar-chart cache-chart" id="cacheMissChart" viewBox="0 0 760 330" role="img" aria-label="Cache Miss 访问周期对比"></svg>
+                </article>
+
+                <article class="chart-card cache-chart-card">
+                  <div class="result-head">
+                    <div>
+                      <span class="eyebrow">Effectiveness</span>
+                      <h3>Cache Hit 访问周期</h3>
+                    </div>
+                    <span class="badge muted" id="cacheHitBadge">等待采集</span>
+                  </div>
+                  <svg class="bar-chart cache-chart" id="cacheHitChart" viewBox="0 0 760 330" role="img" aria-label="Cache Hit 访问周期对比"></svg>
+                </article>
+
+                <article class="chart-card cache-chart-card cache-chart-wide">
+                  <div class="result-head">
+                    <div>
+                      <span class="eyebrow">Security</span>
+                      <h3>跨域隔离验证</h3>
+                    </div>
+                    <span class="badge muted" id="cacheSecurityBadge">等待采集</span>
+                  </div>
+                  <svg class="bar-chart cache-chart" id="cacheSecurityChart" viewBox="0 0 760 330" role="img" aria-label="Cache 跨域隔离验证"></svg>
+                </article>
+              </div>
+            </section>
           </section>
         </section>
       </main>
