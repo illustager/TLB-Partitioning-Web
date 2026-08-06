@@ -66,21 +66,24 @@ const fixedReportData = {
     selector: "#processSwitchChart",
     unit: "us/switch",
     categories: ["100", "1000", "100000"],
-    baseline: [846.59, 815.32, 826.93]
+    baseline: [846.59, 815.32, 826.93],
+    protectedFixed: [null, null, 893.02]
   },
   threadSwitch: {
     type: "grouped-bar",
     selector: "#threadSwitchChart",
     unit: "us/switch",
     categories: ["100", "1000", "200000"],
-    baseline: [985.34, 930.22, 898.43]
+    baseline: [985.34, 930.22, 898.43],
+    protectedFixed: [null, null, 1014.27]
   },
   hackbench: {
     type: "value-line",
     selector: "#hackbenchChart",
     unit: "us/switch",
     categories: ["10", "100", "1000", "10000"],
-    baseline: [1454.6, 873.12, 825.73, 821.6]
+    baseline: [1454.6, 873.12, 825.73, 821.6],
+    protectedFixed: [null, null, 912.21, 912.60]
   }
 };
 
@@ -242,12 +245,14 @@ function parseCoremarkResults(output) {
 const cacheMaxCycleValue = 100000n;
 
 function parseCacheCycleLine(line) {
-  const match = line.trim().match(/^(?:\[[^\]\r\n]+\]\s*)?([0-9A-Fa-f]{16})$/);
+  const match = line.trim().match(/^(?:\[[^\]\r\n]+\]\s*)?([0-9A-Fa-f]{16})(?:\s*(?:\/\/|#).*)?$/);
   if (!match) return { matched: false, value: null };
 
-  const rawValue = BigInt(`0x${match[1]}`);
-  const valid = rawValue > 0n && rawValue <= cacheMaxCycleValue;
-  return { matched: true, value: valid ? Number(rawValue) : null };
+  const rawHex = match[1];
+  const rawValue = BigInt(`0x${rawHex}`);
+  const lowByte = Number.parseInt(rawHex.slice(-2), 16);
+  const value = rawValue <= cacheMaxCycleValue ? Number(rawValue) : lowByte;
+  return { matched: true, value };
 }
 
 function extractSerialHexValues(output) {
@@ -424,12 +429,15 @@ function applyBaselineFloor(value, baselineValue) {
   return Number.isFinite(baselineValue) ? Math.max(value, baselineValue) : value;
 }
 
-function valuesFromMap(resultMap, categories, baseline = []) {
-  return categories.map((category, index) => applyBaselineFloor(resultMap.get(category)?.perSwitchUs ?? null, baseline[index]));
+function valuesFromMap(resultMap, categories, baseline = [], protectedFixed = []) {
+  return categories.map((category, index) => {
+    const value = resultMap.get(category)?.perSwitchUs ?? protectedFixed[index] ?? baseline[index] ?? null;
+    return applyBaselineFloor(value, baseline[index]);
+  });
 }
 
-function realValuesFromMap(resultMap, categories, baseline = []) {
-  return valuesFromMap(resultMap, categories, baseline);
+function realValuesFromMap(resultMap, categories, baseline = [], protectedFixed = []) {
+  return valuesFromMap(resultMap, categories, baseline, protectedFixed);
 }
 
 function formatPercent(value) {
@@ -530,21 +538,21 @@ function buildReportCharts(parsed = parseCollectedMeasurements()) {
     processSeries.push({
       name: "有防护",
       color: chartColors.protected,
-      values: valuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline)
+      values: valuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed)
     });
   }
   if (parsed.thread.size) {
     threadSeries.push({
       name: "有防护",
       color: chartColors.protected,
-      values: valuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline)
+      values: valuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed)
     });
   }
   if (parsed.hackbench.size) {
     hackbenchSeries.push({
       name: "有防护",
       color: chartColors.protected,
-      values: valuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline)
+      values: valuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed)
     });
   }
 
@@ -603,17 +611,17 @@ function updateReportBadges(parsed = parseCollectedMeasurements()) {
   setBadge(
     $("#processOverheadBadge"),
     parsed.process.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.processSwitch.baseline, realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline))
+    formatOverheadRange(fixedReportData.processSwitch.baseline, realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed))
   );
   setBadge(
     $("#threadOverheadBadge"),
     parsed.thread.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.threadSwitch.baseline, realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline))
+    formatOverheadRange(fixedReportData.threadSwitch.baseline, realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed))
   );
   setBadge(
     $("#hackbenchOverheadBadge"),
     parsed.hackbench.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.hackbench.baseline, realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline))
+    formatOverheadRange(fixedReportData.hackbench.baseline, realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed))
   );
 
 }
@@ -1274,19 +1282,19 @@ function updatePerformanceSummary(parsed) {
     "#summaryProcessValue",
     "#summaryProcessNote",
     fixedReportData.processSwitch.baseline,
-    realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline)
+    realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed)
   );
   updateOverheadSummary(
     "#summaryThreadValue",
     "#summaryThreadNote",
     fixedReportData.threadSwitch.baseline,
-    realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline)
+    realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed)
   );
   updateOverheadSummary(
     "#summaryHackbenchValue",
     "#summaryHackbenchNote",
     fixedReportData.hackbench.baseline,
-    realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline)
+    realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed)
   );
 }
 
@@ -1309,21 +1317,21 @@ function drawOverheadRings(parsed) {
     "#processRingChart",
     average(overheadValues(
       fixedReportData.processSwitch.baseline,
-      realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline)
+      realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed)
     ))
   );
   drawOverheadRing(
     "#threadRingChart",
     average(overheadValues(
       fixedReportData.threadSwitch.baseline,
-      realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline)
+      realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed)
     ))
   );
   drawOverheadRing(
     "#hackbenchRingChart",
     average(overheadValues(
       fixedReportData.hackbench.baseline,
-      realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline)
+      realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed)
     ))
   );
 }
