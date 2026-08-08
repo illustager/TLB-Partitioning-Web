@@ -68,8 +68,11 @@ const chartColors = {
   partition: "#2b78aa",
   cacheOriginal: "#e84b40",
   cacheMitigated: "#31c976",
-  cacheSecurityEvicted: "#e84b40"
+  cacheSecurityEvicted: "#e84b40",
+  reference: "#2d7a35"
 };
+
+const REF_TLB_DELTA = [77, 77, 77];
 
 const fixedReportData = {
   partition: {
@@ -601,6 +604,35 @@ function buildReportCharts(parsed = parseCollectedMeasurements()) {
       categories: fixedReportData.hackbench.categories,
       series: hackbenchSeries
     }
+  };
+}
+
+function buildTlbSecurityChart(parsed) {
+  var evictPages = [8, 16, 32];
+  var byEvict = new Map(parsed.partition.map(function (s) { return [s.evictPages, s]; }));
+
+  var p50Values = evictPages.map(function (ep) {
+    var s = byEvict.get(ep);
+    return s && s.deltaP50 ? s.deltaP50.median : null;
+  });
+  var p90Values = evictPages.map(function (ep) {
+    var s = byEvict.get(ep);
+    return s && s.deltaP90 ? s.deltaP90.median : null;
+  });
+
+  return {
+    type: "grouped-bar",
+    selector: "#tlbSecurityChart",
+    unit: "cyc",
+    xLabel: "参数点",
+    categories: evictPages.map(function (ep) { return "EVICT_PAGES=" + ep; }),
+    series: [
+      { name: "无防护参考值", color: chartColors.reference, values: REF_TLB_DELTA },
+      { name: "delta p50", color: chartColors.partition, values: p50Values },
+      { name: "delta p90", color: chartColors.protected, values: p90Values }
+    ],
+    minValue: -5,
+    emptyLabel: "等待 TLB 安全采集"
   };
 }
 
@@ -1632,7 +1664,13 @@ function renderReportCharts() {
 
   if (protection === "tlb") {
     Object.values(buildReportCharts(parsed)).forEach(drawChart);
+    drawChart(buildTlbSecurityChart(parsed));
     updateReportBadges(parsed);
+    setBadge(
+      $("#tlbSecurityBadge"),
+      parsed.partition.length ? "good" : "muted",
+      parsed.partition.length ? "已有采集数据" : "等待采集"
+    );
     updatePerformanceSummary(parsed);
     drawOverheadRings(parsed);
     setBadge($("#tlbReportStatus"), parsed.process.size || parsed.thread.size || parsed.hackbench.size ? "good" : "muted", parsed.process.size || parsed.thread.size || parsed.hackbench.size ? "已有采集数据" : "等待采集");
@@ -1817,7 +1855,7 @@ function createChartContext(config, options = {}) {
   return { svg, ns, width, height, padding, plotWidth, plotHeight, add };
 }
 
-function drawGrid(ctx, unit, minValue, maxValue, ticks = 4) {
+function drawGrid(ctx, unit, minValue, maxValue, ticks = 4, skipBottom = false) {
   const { width, height, padding, plotHeight, add } = ctx;
   for (let i = 0; i <= ticks; i += 1) {
     const y = padding.top + (plotHeight / ticks) * i;
@@ -1825,7 +1863,9 @@ function drawGrid(ctx, unit, minValue, maxValue, ticks = 4) {
     add("line", { x1: padding.left, y1: y, x2: width - padding.right, y2: y, stroke: "#d3dbd0", "stroke-width": 1 });
     add("text", { x: padding.left - 10, y: y + 4, "text-anchor": "end", fill: "#657064", "font-size": 11 }, formatChartNumber(value));
   }
-  add("line", { x1: padding.left, y1: height - padding.bottom, x2: width - padding.right, y2: height - padding.bottom, stroke: "#869283", "stroke-width": 1.2 });
+  if (!skipBottom) {
+    add("line", { x1: padding.left, y1: height - padding.bottom, x2: width - padding.right, y2: height - padding.bottom, stroke: "#869283", "stroke-width": 1.2 });
+  }
   add("line", { x1: padding.left, y1: padding.top, x2: padding.left, y2: height - padding.bottom, stroke: "#869283", "stroke-width": 1.2 });
   add("text", { x: padding.left, y: 18, fill: "#657064", "font-size": 11, "font-weight": 700 }, unit);
 }
@@ -1868,8 +1908,8 @@ function drawCategoryLabels(ctx, categories, options = {}) {
 }
 
 function drawLegend(ctx, series) {
-  const legendColumns = series.length > 2 ? 2 : Math.max(1, series.length);
-  const legendItemWidth = series.length > 2 ? 138 : 96;
+  const legendColumns = series.length > 3 ? 2 : Math.max(1, series.length);
+  const legendItemWidth = series.length > 3 ? 138 : 96;
   const legendBoxWidth = legendColumns * legendItemWidth + 18;
   const legendBoxX = ctx.width - ctx.padding.right - legendBoxWidth - 10;
   const legendBoxY = 18;
@@ -2193,14 +2233,36 @@ function drawGroupedBarChart(config) {
 
   const values = config.series.flatMap((item) => item.values).filter((value) => Number.isFinite(value));
   const maxValue = Math.max(1, ...values, Number.isFinite(config.threshold) ? config.threshold : 0) * 1.18;
-  const minValue = 0;
+  const minValue = config.minValue ?? 0;
   const categoryWidth = ctx.plotWidth / config.categories.length;
   const barGap = 5;
   const seriesCount = Math.max(1, config.series.length);
   const groupPadding = Math.max(16, categoryWidth * 0.16);
   const barWidth = Math.max(7, (categoryWidth - groupPadding * 2 - barGap * (seriesCount - 1)) / seriesCount);
 
-  drawGrid(ctx, config.unit, minValue, maxValue);
+  const skipBottom = minValue < 0;
+  drawGrid(ctx, config.unit, minValue, maxValue, 4, skipBottom);
+
+  const zeroY = valueToY(ctx, 0, minValue, maxValue);
+
+  if (skipBottom) {
+    ctx.add("line", {
+      x1: ctx.padding.left,
+      y1: zeroY,
+      x2: ctx.width - ctx.padding.right,
+      y2: zeroY,
+      stroke: "#869283",
+      "stroke-width": 1.2
+    });
+    ctx.add("text", {
+      x: ctx.padding.left - 12,
+      y: zeroY + 4,
+      "text-anchor": "end",
+      fill: "#869283",
+      "font-size": 11,
+      "font-weight": 700
+    }, "0");
+  }
 
   if (Number.isFinite(config.threshold)) {
     const thresholdY = valueToY(ctx, config.threshold, minValue, maxValue);
@@ -2229,10 +2291,12 @@ function drawGroupedBarChart(config) {
       const value = series.values[categoryIndex];
       if (!Number.isFinite(value)) return;
       const x = groupX + groupPadding + seriesIndex * (barWidth + barGap);
-      const y = valueToY(ctx, value, minValue, maxValue);
-      const barHeight = ctx.height - ctx.padding.bottom - y;
-      ctx.add("rect", { x, y, width: barWidth, height: barHeight, rx: 2, fill: series.color });
-      ctx.add("text", { x: x + barWidth / 2, y: y - 5, "text-anchor": "middle", fill: "#20251f", "font-size": 10, "font-weight": 700 }, formatChartNumber(value));
+      const barValY = valueToY(ctx, value, minValue, maxValue);
+      const barY = Math.min(barValY, zeroY);
+      const barHeight = Math.max(2, Math.abs(zeroY - barValY));
+      const labelY = value >= 0 ? barValY - 5 : barValY + barHeight + 12;
+      ctx.add("rect", { x, y: barY, width: barWidth, height: barHeight, rx: 2, fill: series.color });
+      ctx.add("text", { x: x + barWidth / 2, y: labelY, "text-anchor": "middle", fill: "#20251f", "font-size": 10, "font-weight": 700 }, formatChartNumber(value));
     });
     ctx.add("text", {
       x: groupX + categoryWidth / 2,
@@ -2243,6 +2307,17 @@ function drawGroupedBarChart(config) {
       "font-weight": 700
     }, category);
   });
+
+  if (config.xLabel) {
+    ctx.add("text", {
+      x: ctx.padding.left + ctx.plotWidth / 2,
+      y: ctx.height - 6,
+      "text-anchor": "middle",
+      fill: "#657064",
+      "font-size": 10,
+      "font-weight": 700
+    }, config.xLabel);
+  }
 
   if (!config.series.length) {
     ctx.add("text", {

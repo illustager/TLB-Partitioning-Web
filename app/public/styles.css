@@ -2375,7 +2375,8 @@ input:disabled {
   min-height: 390px;
 }
 
-.cache-chart-wide {
+.cache-chart-wide,
+.tlb-security-chart-card {
   grid-column: 1 / -1;
 }
 
