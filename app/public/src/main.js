@@ -1294,14 +1294,24 @@ function renderCacheHeatmap(heatmap) {
     row.forEach((value, x) => {
       if (!Number.isFinite(value)) return;
       const t = Math.max(0, Math.min(1, (value - min) / span));
-      const lightness = 94 - t * 46;
-      const chroma = 0.04 + t * 0.12;
+      let l, c, h;
+      if (t < 0.5) {
+        const s = t / 0.5;
+        l = 44 + s * 50;
+        c = 0.15 - s * 0.13;
+        h = 265;
+      } else {
+        const s = (t - 0.5) / 0.5;
+        l = 94 - s * 50;
+        c = 0.02 + s * 0.13;
+        h = 28;
+      }
       add("rect", {
         x: padding.left + x * cellWidth,
         y: padding.top + y * cellHeight,
         width: Math.max(0.5, cellWidth + 0.2),
         height: Math.max(0.5, cellHeight + 0.2),
-        fill: `oklch(${lightness}% ${chroma} 38)`
+        fill: `oklch(${l}% ${c} ${h})`
       });
     });
   });

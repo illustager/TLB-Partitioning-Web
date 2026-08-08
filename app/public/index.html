@@ -411,7 +411,7 @@
               <svg class="cache-heatmap" id="cacheHeatmap" viewBox="0 0 760 380" role="img" aria-label="Cache 第一字节采样热力图"></svg>
               <div class="cache-heatmap-copy">
                 <strong id="cacheHeatmapResult">等待 Mallory 生成 output.csv</strong>
-                <p>横坐标为测试输入，纵坐标为 Cache Set 索引，亮度表示采样时间偏移。亮色块形成稳定模式后，即可推断 AES T 表访问与密钥第一字节的关系。</p>
+                <p>横坐标为测试输入，纵坐标为 Cache Set 索引，颜色表示采样时间。根据色块分布模式可以推断 AES T 表访问索引，进而推断密钥。</p>
                 <div class="cache-heatmap-scale"><span></span><b>低时延</b><b>高时延</b></div>
               </div>
             </div>
