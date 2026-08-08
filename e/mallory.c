@@ -93,12 +93,15 @@ int main(int argc, char* argv[]) {
 	pp_init(cache_sets, line_shift, cache_level);
 	udp_init();
 
+	FOUT = true;
 	printf("Recovered key:");
 	fflush(stdout);
 	for (int i = key_start; i < key_start + key_length; i++) {
 	    delayloop(DELAY_LOOP_COUNT);
 		printf("%02x", pp(crypto, NULL, num_samples, i));
 		fflush(stdout);
+
+		FOUT = false;
 	}
 	printf("\n");
 }

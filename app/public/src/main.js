@@ -2,19 +2,36 @@ import { apiGet, apiPost } from "./api.js";
 
 const state = {
   targets: [],
+  activePage: "overview",
   terminalText: "",
   resultsByCommand: {},
   sshSession: null,
   unprotectedSession: null,
-  latestResult: null
+  latestResult: null,
+  tlbAttackGuideStep: 0
 };
 
 const views = {
-  overview: "概览",
-  connections: "连接",
-  unprotected: "攻击 POC",
+  overview: "作品介绍",
+  connections: "系统配置",
+  "cache-attack": "Cache攻击",
+  "cache-protection": "Cache防护",
+  "cache-performance": "Cache性能指标",
+  "tlb-attack": "TLB攻击",
+  "tlb-protection": "TLB防护",
+  "tlb-performance": "TLB性能指标",
+  unprotected: "Cache攻击",
   protected: "防护采集",
-  compare: "结果对比"
+  compare: "性能指标"
+};
+
+const viewTargets = {
+  "cache-attack": "unprotected",
+  "cache-protection": "protected",
+  "cache-performance": "compare",
+  "tlb-attack": "tlbAttack",
+  "tlb-protection": "protected",
+  "tlb-performance": "compare"
 };
 
 const phaseLabels = {
@@ -39,6 +56,7 @@ const commandLabels = {
   runPerfProc: "进程上下文切换压力测试",
   runPerfThread: "线程上下文切换压力测试",
   runPerfConcurrent: "Hackbench 并发调度压力测试",
+  runTestNo: "TLB 攻击演示",
   runCacheEffectiveness: "Cache 性能采集",
   runCacheSecurity: "Cache 安全采集",
   runCacheAllRounds: "Cache 完整采集"
@@ -245,7 +263,8 @@ function parseCoremarkResults(output) {
 const cacheMaxCycleValue = 100000n;
 
 function parseCacheCycleLine(line) {
-  const match = line.trim().match(/^(?:\[[^\]\r\n]+\]\s*)?([0-9A-Fa-f]{16})(?:\s*(?:\/\/|#).*)?$/);
+  const text = line.trim();
+  const match = text.match(/^addr=[A-Za-z0-9_-]+:([0-9A-Fa-f]{16})$/i);
   if (!match) return { matched: false, value: null };
 
   const rawHex = match[1];
@@ -282,9 +301,9 @@ function aggregateCacheFrames(values, frameSize) {
     if (frame.every((value) => Number.isFinite(value))) validFrames.push(frame);
   }
 
-  const aggregated = Array.from({ length: frameSize }, (_, index) =>
-    median(validFrames.map((frame) => frame[index]))
-  );
+  // 日志约定重复输出以最后一次完整帧为准。
+  const latestFrame = validFrames[validFrames.length - 1] || [];
+  const aggregated = Array.from({ length: frameSize }, (_, index) => latestFrame[index] ?? null);
 
   return {
     values: aggregated,
@@ -349,21 +368,17 @@ function parseCacheRoundOutputs(output) {
 
   for (const line of stripAnsi(output).split("\n")) {
     const text = line.trim();
-    const heading = text.match(/^(effectiveness|security)\s*-\s*(original|mitigated)$/i);
-    const marker = text.match(/^CACHE_RESULT_BEGIN\s+test=(effectiveness|security)\s+variant=(original|mitigated)$/i);
+    const heading = text.match(/^=+\s*第\s*\d+\s*轮:\s*(original|mitigated)\s*-\s*(effectiveness|security)\s*=+$/i);
 
-    if (heading || marker) {
+    if (heading) {
       commit();
+      const test = heading[2];
+      const variant = heading[1];
       current = {
-        test: (heading || marker)[1].toLowerCase(),
-        variant: (heading || marker)[2].toLowerCase(),
+        test: test.toLowerCase(),
+        variant: variant.toLowerCase(),
         values: []
       };
-      continue;
-    }
-
-    if (/^CACHE_RESULT_END$/i.test(text)) {
-      commit();
       continue;
     }
 
@@ -791,22 +806,261 @@ function setBadge(node, className, text) {
 
 function setView(view) {
   if (!views[view]) return;
-  $$(".view").forEach((node) => node.classList.toggle("active", node.id === view));
+  const targetView = viewTargets[view] || view;
+  state.activePage = view;
+  $$(".view").forEach((node) => node.classList.toggle("active", node.id === targetView));
   $$(".nav-item[data-view]").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
   $("#pageTitle").textContent = views[view];
-  if (view === "compare") renderReportCharts();
+  const protectedView = $("#protected");
+  if (protectedView) {
+    protectedView.dataset.protection = state.activePage === "tlb-protection" ? "tlb" : "cache";
+  }
+  renderPageContext();
+  if (targetView === "compare") renderReportCharts();
+  if (targetView === "tlbAttack") renderTlbAttackView();
+}
+
+function activeProtectionContext() {
+  if (state.activePage.startsWith("cache-")) return "cache";
+  if (state.activePage.startsWith("tlb-")) return "tlb";
+  return currentTarget()?.protection || null;
+}
+
+function renderPageContext() {
+  const pageTitle = views[state.activePage] || views.overview;
+  $("#pageTitle").textContent = pageTitle;
+  const protectedTitle = $("#protectedPageTitle");
+  if (protectedTitle && ["cache-protection", "tlb-attack", "tlb-protection"].includes(state.activePage)) {
+    protectedTitle.textContent = pageTitle;
+  }
+  const attackTitle = $("#attackPageTitle");
+  if (attackTitle && state.activePage === "cache-attack") attackTitle.textContent = pageTitle;
+}
+
+const tlbAttackStageLabels = {
+  0: "建立时延基线",
+  1: "测量 TLB Hit",
+  2: "制造 Evict",
+  3: "Prime + Probe",
+  4: "Probe 观测",
+  5: "重构 Secret"
+};
+
+const tlbAttackExplanations = {
+  0: "建立 cycles 参照。",
+  1: "VA 命中，低时延。",
+  2: "VA 未命中，高时延。",
+  3: "Mallory 填充同一目标 Set。",
+  4: "Victim 访问 VA(S)，Probe 读出 Δt。",
+  5: "Δt 转换为 Secret bit。"
+};
+
+const tlbAttackStaticSamples = {
+  0: {
+    main: "Hit P50 = 71 cycles",
+    compare: "Miss P50 = 232 cycles",
+    verdict: "TH = 151 cycles"
+  },
+  1: {
+    main: "Hit P50 = 71 cycles",
+    compare: "低时延",
+    verdict: "Hit"
+  },
+  2: {
+    main: "Miss P50 = 232 cycles",
+    compare: "TH = 151 cycles",
+    verdict: "Miss"
+  },
+  3: {
+    main: "Set k: VA(M)",
+    compare: "2 Set × 2 Way",
+    verdict: "Prime"
+  },
+  4: {
+    main: "Probe Δ ≈ 161 cycles",
+    compare: "Set k ↑",
+    verdict: "Leak"
+  },
+  5: {
+    main: "TX ≈ RX",
+    compare: "BAC ≈ 100%",
+    verdict: "Secret bit"
+  }
+};
+
+function parseTlbAttackOutput(output = "") {
+  const lines = stripAnsi(output).split("\n");
+  const steps = new Map();
+  const relation = {};
+  let relationSection = false;
+  let stageIndex = -1;
+  let sid = null;
+  let calibration = null;
+  let demo = null;
+  let tx = "";
+  let rx = "";
+
+  lines.forEach((line) => {
+    const text = line.trim();
+    if (!text) return;
+    if (/^RELATION\b/i.test(text)) {
+      relationSection = true;
+      return;
+    }
+    if (/^SYNC\b|^===\s*STEP5\b/i.test(text)) relationSection = false;
+
+    const step = text.match(/^STEP(\d+)\s+(.+?)\s+avg=(-?\d+)\s+cyc,\s+min=(-?\d+),\s+p50=(-?\d+),\s+p90=(-?\d+)/i);
+    if (step) {
+      const number = Number(step[1]);
+      stageIndex = Math.max(stageIndex, number);
+      steps.set(number, {
+        label: step[2],
+        avg: Number(step[3]),
+        min: Number(step[4]),
+        p50: Number(step[5]),
+        p90: Number(step[6])
+      });
+    }
+    if (/^===\s*STEP5\b/i.test(text)) stageIndex = Math.max(stageIndex, 5);
+
+    const sidMatch = text.match(/SID\(parent\/child\)=(-?\d+)\/(-?\d+)/i);
+    if (sidMatch) sid = { parent: Number(sidMatch[1]), child: Number(sidMatch[2]) };
+    const syncMatch = text.match(/parent_sid=(-?\d+)\s+child_sid\(last\)=(-?\d+)/i);
+    if (syncMatch) sid = { parent: Number(syncMatch[1]), child: Number(syncMatch[2]) };
+
+    const cal = text.match(/^CAL:\s*hit_p50=(-?\d+)\s+miss_p50=(-?\d+)\s+threshold=(-?\d+)/i);
+    if (cal) calibration = { hitP50: Number(cal[1]), missP50: Number(cal[2]), threshold: Number(cal[3]) };
+
+    const demoMatch = text.match(/^DEMO:\s*bits=(\d+)\s+BER=([\d.]+)%\s+BAC=([\d.]+)%/i);
+    if (demoMatch) demo = { bits: Number(demoMatch[1]), ber: Number(demoMatch[2]), bac: Number(demoMatch[3]) };
+
+    const bits = text.match(/^(tx|rx)\[[^\]]+\]:\s*([01]+)/i);
+    if (bits) {
+      if (bits[1].toLowerCase() === "tx") tx = bits[2];
+      if (bits[1].toLowerCase() === "rx") rx = bits[2];
+    }
+
+    if (relationSection) {
+      const relationMatch = text.match(/^(.+?)\s*=\s*(-?\d+)\s*$/);
+      if (relationMatch) relation[relationMatch[1].trim()] = Number(relationMatch[2]);
+    }
+  });
+
+  const idleThrashDelta = Object.entries(relation).find(([label]) => /switch\+thrash\+load\)\s*-\s*\(switch\+idle\+load\)/i.test(label))?.[1] ?? null;
+  const hitP50 = calibration?.hitP50 ?? steps.get(1)?.p50 ?? null;
+  const missP50 = calibration?.missP50 ?? steps.get(2)?.p50 ?? null;
+  const threshold = calibration?.threshold ?? (hitP50 !== null && missP50 !== null ? Math.round((hitP50 + missP50) / 2) : null);
+
+  return {
+    hasOutput: /(?:^|\n)(?:===\s*Step-by-step TLB|CONFIG:|STEP\d+\b|RELATION\b)/im.test(stripAnsi(output)),
+    stageIndex,
+    steps,
+    relation,
+    sid,
+    hitP50,
+    missP50,
+    threshold,
+    idleThrashDelta,
+    demo,
+    tx,
+    rx,
+    success: Boolean(demo && demo.bac >= 99.99 && tx && rx)
+  };
+}
+
+function tlbAttackOutput() {
+  const result = state.latestResult;
+  if (result?.commandKey === "runTestNo" && result.status === "captured") return result.output || "";
+  const raw = state.terminalText || result?.output || "";
+  const start = raw.search(/(?:^|\n)(?:===\s*Step-by-step TLB|CONFIG:|STEP\d+\b)/i);
+  return start >= 0 ? raw.slice(start).trimStart() : "";
+}
+
+function renderTlbAttackView() {
+  const outputNode = $("#tlbAttackOutput");
+  if (!outputNode) return;
+  const parsed = parseTlbAttackOutput(tlbAttackOutput());
+  const availableStage = 5;
+  state.tlbAttackGuideStep = Math.min(5, Math.max(0, state.tlbAttackGuideStep));
+  const stage = state.tlbAttackGuideStep;
+  const connected = Boolean(state.sshSession?.connected);
+  const target = currentTarget();
+  const isTlb = connected && target?.protection === "tlb";
+  const collecting = state.latestResult?.status === "running" && state.latestResult?.commandKey === "runTestNo";
+
+  outputNode.textContent = tlbAttackOutput() || "等待 TLB 攻击脚本输出...";
+  outputNode.scrollTop = outputNode.scrollHeight;
+  setText("#tlbAttackTarget", isTlb ? `${target.label || target.name} / ${target.host}` : "未配置 TLB FPGA");
+  setBadge($("#tlbAttackStageBadge"), parsed.hasOutput ? "good" : "idle", parsed.hasOutput ? `演示 ${stage + 1} · ${tlbAttackStageLabels[stage] || "攻击输出"}` : "静态演示");
+  setBadge($("#tlbAttackVerdict"), parsed.success ? "bad" : parsed.demo ? "warn" : "muted", parsed.success ? "无防护攻击成功" : parsed.demo ? "等待结果确认" : "等待真实输出");
+  setBadge($("#tlbReproductionBadge"), parsed.success ? "bad" : parsed.demo ? "warn" : "muted", parsed.demo ? `BAC ${parsed.demo.bac.toFixed(1)}% · BER ${parsed.demo.ber.toFixed(1)}%` : "等待重构");
+  setBadge($("#tlbSharingBadge"), parsed.sid ? "warn" : "muted", parsed.sid ? `SID ${parsed.sid.parent} / ${parsed.sid.child}` : "等待共享观测");
+
+  $("#runTlbAttackBtn").disabled = !isTlb || collecting;
+  $("#runTlbAttackBtn").textContent = collecting ? "攻击执行中..." : "启动TLB攻击";
+  $("#tlbGuidePrevBtn").disabled = stage <= 0;
+  $("#tlbGuideNextBtn").disabled = stage >= availableStage;
+  $$("#tlbAttackStageList li").forEach((item) => {
+    const itemStage = Number(item.dataset.tlbStage);
+    const active = itemStage === 3 ? stage >= 3 && stage < 5 : itemStage === 5 ? stage >= 5 : stage === itemStage;
+    const done = itemStage === 3 ? stage >= 5 : stage > itemStage;
+    item.classList.toggle("active", active);
+    item.classList.toggle("done", done);
+  });
+  $("#tlbAttackExplanation").textContent = tlbAttackExplanations[stage] || tlbAttackExplanations[0];
+
+  const sample = tlbAttackStaticSamples[stage] || tlbAttackStaticSamples[0];
+  const sampleMain = {
+    1: parsed.hitP50 === null ? sample.main : `Hit P50 = ${parsed.hitP50} cycles`,
+    2: parsed.missP50 === null ? sample.main : `Miss P50 = ${parsed.missP50} cycles`,
+    3: parsed.sid ? `SID parent / child = ${parsed.sid.parent} / ${parsed.sid.child}` : sample.main,
+    4: parsed.idleThrashDelta === null ? sample.main : `Idle / Thrash Δ = ${parsed.idleThrashDelta} cycles`,
+    5: parsed.demo ? `BAC = ${parsed.demo.bac.toFixed(1)}%` : sample.main
+  }[stage] || sample.main;
+  const sampleCompare = {
+    2: parsed.threshold === null ? sample.compare : `TH = ${parsed.threshold} cycles`,
+    5: parsed.demo ? `BER = ${parsed.demo.ber.toFixed(1)}%` : sample.compare
+  }[stage] || sample.compare;
+  setText("#tlbDemoMetricMain", sampleMain);
+  setText("#tlbDemoMetricCompare", sampleCompare);
+  setText("#tlbDemoMetricVerdict", sample.verdict);
+
+  setText("#tlbHitP50", parsed.hitP50 === null ? "--" : `${parsed.hitP50}`);
+  setText("#tlbMissP50", parsed.missP50 === null ? "--" : `${parsed.missP50}`);
+  setText("#tlbThreshold", parsed.threshold === null ? "--" : `${parsed.threshold}`);
+  setText("#tlbIdleThrashDelta", parsed.idleThrashDelta === null ? "--" : `${parsed.idleThrashDelta}`);
+  setText("#tlbSidValue", parsed.sid ? `${parsed.sid.parent} / ${parsed.sid.child}` : "--");
+  setText("#tlbBitMatch", parsed.demo ? `${parsed.demo.bac.toFixed(1)}%` : "--");
+  setText("#tlbTxBits", parsed.tx || "等待真实输出");
+  setText("#tlbRxBits", parsed.rx || "等待真实输出");
+
+  const diagram = $(".tlb-attack-diagram");
+  if (diagram) {
+    diagram.dataset.guideStage = String(stage);
+    setText("#tlbDiagramState", ({
+      0: "cycles baseline",
+      1: "VA hit",
+      2: "VA miss",
+      3: "Prime Set k",
+      4: "Probe Δt",
+      5: "Secret bit"
+    })[stage] || "TLB 攻击原理");
+  }
+  $("#tlbTxBits").title = parsed.tx || "";
+  $("#tlbRxBits").title = parsed.rx || "";
 }
 
 function appendTerminal(text) {
   state.terminalText += stripAnsi(text);
-  if (state.terminalText.length > 60000) {
-    state.terminalText = state.terminalText.slice(-60000);
+  if (state.terminalText.length > 120000) {
+    state.terminalText = state.terminalText.slice(-120000);
   }
   const node = $("#terminalOutput");
   node.textContent = state.terminalText || "等待远程终端输出...";
   node.scrollTop = node.scrollHeight;
+  renderTlbAttackView();
 }
 
 function currentTarget() {
@@ -883,12 +1137,14 @@ function setStatus(session = {}) {
   state.sshSession = session;
   const connected = Boolean(session.connected);
   const target = session.target;
-  const label = connected ? `${protectionLabel(target)} 已连接` : `远程 ${session.status || "未连接"}`;
+  const remoteLabel = session.status === "connecting" ? "远程配置中..." : "远程未配置";
+  const label = connected ? `${protectionLabel(target)} 已连接` : remoteLabel;
   setPill($("#sshStatus"), connected ? "online" : "offline", label);
-  $("#sideStatus").textContent = connected ? protectionLabel(target) : "未连接";
-  setBadge($("#sshBadge"), connected ? "good" : "muted", connected ? "已连接" : "未连接");
+  $("#sideStatus").textContent = connected ? protectionLabel(target) : "未配置";
+  setBadge($("#sshBadge"), connected ? "good" : "muted", connected ? "已连接" : "未配置");
   renderConnectionAction();
   renderProtectedState();
+  renderTlbAttackView();
   renderOverview();
 }
 
@@ -898,7 +1154,7 @@ function renderConnectionAction() {
   const connected = Boolean(state.sshSession?.connected);
   const connecting = state.sshSession?.status === "connecting";
   button.className = `btn ${connected ? "danger-soft" : "primary"}`;
-  button.textContent = connected ? "断开连接" : connecting ? "连接中..." : "保存并连接";
+  button.textContent = connected ? "断开连接" : connecting ? "配置中..." : "配置";
   button.disabled = connecting;
 }
 
@@ -932,7 +1188,7 @@ function renderOverview() {
   const target = currentTarget();
 
   $("#overviewBackend").textContent = $("#backendMini")?.textContent || "检查中";
-  $("#overviewActiveTarget").textContent = connected ? `${protectionLabel(target)} / ${target?.host || "--"}` : "未连接";
+  $("#overviewActiveTarget").textContent = connected ? `${protectionLabel(target)} / ${target?.host || "--"}` : "未配置";
   $("#overviewScript").textContent = state.unprotectedSession?.running
     ? (phaseLabels[state.unprotectedSession.phase] || state.unprotectedSession.phase || "运行中")
     : "待机";
@@ -951,7 +1207,7 @@ function renderProtectedState() {
   const target = currentTarget();
   const protection = connected ? target?.protection : null;
   const collecting = state.latestResult?.status === "running";
-  $("#protectedActiveTarget").textContent = connected ? `${target?.label || target?.name} / ${target?.host}` : "未连接";
+  $("#protectedActiveTarget").textContent = connected ? `${target?.label || target?.name} / ${target?.host}` : "未配置";
   $("#protectedConnectionKind").textContent = connected ? targetKindLabel(target) : "--";
   $("#terminalInput").disabled = !connected;
   $("#terminalForm button[type='submit']").disabled = !connected;
@@ -985,6 +1241,88 @@ function setInputValue(selector, value) {
   if (value !== undefined && value !== null) node.value = value;
 }
 
+function renderCacheHeatmap(heatmap) {
+  const svg = $("#cacheHeatmap");
+  if (!svg) return;
+  const badge = $("#cacheHeatmapBadge");
+  const result = $("#cacheHeatmapResult");
+  const ns = "http://www.w3.org/2000/svg";
+  svg.replaceChildren();
+
+  const width = 760;
+  const height = 380;
+  const padding = { left: 64, right: 24, top: 24, bottom: 48 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+
+  const add = (tag, attrs = {}) => {
+    const node = document.createElementNS(ns, tag);
+    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+    svg.appendChild(node);
+    return node;
+  };
+
+  add("rect", { x: 0, y: 0, width, height, rx: 8, fill: "#fbfcf8" });
+
+  if (!heatmap?.values?.length) {
+    add("text", {
+      x: width / 2,
+      y: height / 2,
+      "text-anchor": "middle",
+      fill: "#657064",
+      "font-size": 18,
+      "font-weight": 800
+    }).textContent = "等待 output.csv 采样数据";
+    setBadge(badge, "muted", "等待 output.csv");
+    if (result) result.textContent = "等待 Mallory 生成 output.csv";
+    return;
+  }
+
+  const rows = heatmap.values;
+  const rowCount = heatmap.rows || rows.length;
+  const colCount = heatmap.cols || Math.max(...rows.map((row) => row.length));
+  const min = Number.isFinite(heatmap.min) ? heatmap.min : Math.min(...rows.flat().filter(Number.isFinite));
+  const max = Number.isFinite(heatmap.max) ? heatmap.max : Math.max(...rows.flat().filter(Number.isFinite));
+  const span = Math.max(1, max - min);
+  const cellWidth = plotWidth / colCount;
+  const cellHeight = plotHeight / rowCount;
+
+  add("text", { x: padding.left, y: 16, fill: "#657064", "font-size": 11, "font-weight": 800 }).textContent = "Cache Set";
+  add("text", { x: width - padding.right, y: height - 12, fill: "#657064", "font-size": 11, "font-weight": 800, "text-anchor": "end" }).textContent = "测试输入";
+
+  rows.forEach((row, y) => {
+    row.forEach((value, x) => {
+      if (!Number.isFinite(value)) return;
+      const t = Math.max(0, Math.min(1, (value - min) / span));
+      const lightness = 94 - t * 46;
+      const chroma = 0.04 + t * 0.12;
+      add("rect", {
+        x: padding.left + x * cellWidth,
+        y: padding.top + y * cellHeight,
+        width: Math.max(0.5, cellWidth + 0.2),
+        height: Math.max(0.5, cellHeight + 0.2),
+        fill: `oklch(${lightness}% ${chroma} 38)`
+      });
+    });
+  });
+
+  for (let i = 0; i <= 4; i += 1) {
+    const y = padding.top + (plotHeight * i) / 4;
+    add("line", { x1: padding.left - 4, y1: y, x2: padding.left, y2: y, stroke: "#aeb8ac", "stroke-width": 1 });
+    add("text", { x: padding.left - 10, y: y + 4, fill: "#657064", "font-size": 10, "text-anchor": "end" }).textContent = Math.round((rowCount * i) / 4);
+  }
+
+  for (let i = 0; i <= 4; i += 1) {
+    const x = padding.left + (plotWidth * i) / 4;
+    add("line", { x1: x, y1: padding.top + plotHeight, x2: x, y2: padding.top + plotHeight + 4, stroke: "#aeb8ac", "stroke-width": 1 });
+    add("text", { x, y: padding.top + plotHeight + 20, fill: "#657064", "font-size": 10, "text-anchor": "middle" }).textContent = Math.round((colCount * i) / 4);
+  }
+
+  add("rect", { x: padding.left, y: padding.top, width: plotWidth, height: plotHeight, fill: "none", stroke: "#d7ded4", "stroke-width": 1 });
+  setBadge(badge, "good", `${rowCount} × ${colCount} 采样矩阵`);
+  if (result) result.textContent = `已载入 output.csv，采样范围 ${min} 到 ${max}`;
+}
+
 function renderUnprotectedStatus(session = {}) {
   state.unprotectedSession = session;
   const phase = session.phase || "idle";
@@ -1000,7 +1338,7 @@ function renderUnprotectedStatus(session = {}) {
   setInputValue("#malloryCacheLevel", session.recovery?.cacheLevel);
   setInputValue("#malloryStart", session.recovery?.start);
   setInputValue("#malloryCount", session.recovery?.count);
-  $("#recoveredKey").textContent = session.recoveredKey || "--";
+  $("#recoveredKey").textContent = session.recoveredKey || session.recoveredKeyPartial || "--";
   $("#eveState").textContent = session.eveReady ? "已启用" : "未启用";
   $("#attackPhase").textContent = phaseText;
   $("#eavesdropPreview").textContent = session.lastEavesdrop?.text || session.lastCiphertext || "--";
@@ -1014,7 +1352,7 @@ function renderUnprotectedStatus(session = {}) {
 
   const failed = phase.endsWith("failed") || phase === "key-mismatch";
   const statusClass = failed ? "offline" : session.eveReady ? "done" : "idle";
-  setPill($("#unprotectedStatus"), statusClass, `攻击 POC ${phaseText}`);
+  setPill($("#unprotectedStatus"), statusClass, `攻击演示 ${phaseText}`);
 
   const badge = $("#unprotectedPhaseBadge");
   badge.textContent = phaseText;
@@ -1026,13 +1364,15 @@ function renderUnprotectedStatus(session = {}) {
   setTimelineDone("key", session.recoveredKeyValid === true);
   setTimelineDone("eve", active && Boolean(session.eveReady));
   setTimelineDone("result", phase === "message-recovered");
+  renderCacheHeatmap(session.cacheHeatmap);
   renderOverview();
 }
 
 function clearUnprotectedLogs() {
   $("#logAlice").textContent = "[idle] 等待发送消息";
   $("#logBob").textContent = "[idle] 等待 Bob 解密输出";
-  $("#logObserver").textContent = "[idle] 等待 Prime+Probe 与窃听输出";
+  $("#logMallory").textContent = "[idle] 等待 Prime+Probe 输出";
+  $("#logEve").textContent = "[idle] 等待窃听输出";
 }
 
 function appendLog(selector, text) {
@@ -1048,8 +1388,10 @@ function appendUnprotectedLog(entry) {
     appendLog("#logAlice", text);
   } else if (entry.role === "bob") {
     appendLog("#logBob", text);
+  } else if (entry.role === "eve") {
+    appendLog("#logEve", text);
   } else {
-    appendLog("#logObserver", text);
+    appendLog("#logMallory", text);
   }
 }
 
@@ -1080,6 +1422,7 @@ function renderLatestResult(result) {
   $("#latestOutput").textContent = summarizeLatestResult(result);
   renderReportCharts();
   renderProtectedState();
+  renderTlbAttackView();
   renderOverview();
 }
 
@@ -1112,6 +1455,35 @@ function bindEvents() {
 
   $("#connectBtn").addEventListener("click", () => safeAction(toggleConnection));
 
+  $("#runTlbAttackBtn").addEventListener("click", () => safeAction(async () => {
+
+    const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runTestNo" });
+    setStatus(payload);
+    renderResultPayload(payload);
+    toast("已启动 TLB 无防护攻击");
+  }));
+
+  $("#tlbGuidePrevBtn").addEventListener("click", () => {
+    state.tlbAttackGuideStep = Math.max(0, state.tlbAttackGuideStep - 1);
+    renderTlbAttackView();
+  });
+
+  $("#tlbGuideNextBtn").addEventListener("click", () => {
+    state.tlbAttackGuideStep = Math.min(5, state.tlbAttackGuideStep + 1);
+    renderTlbAttackView();
+  });
+  $$("#tlbAttackStageList li").forEach((item) => {
+    item.addEventListener("click", () => {
+      state.tlbAttackGuideStep = Number(item.dataset.tlbStage || 0);
+      renderTlbAttackView();
+    });
+  });
+
+  $("#copyTlbAttackBtn").addEventListener("click", () => safeAction(async () => {
+    await navigator.clipboard.writeText($("#tlbAttackOutput").textContent);
+    toast("TLB 攻击输出已复制");
+  }));
+
   $("#startUnprotectedBtn").addEventListener("click", () => safeAction(async () => {
     const session = await apiPost("/api/unprotected/start", {
       key: $("#unprotectedKey").value,
@@ -1125,7 +1497,7 @@ function bindEvents() {
     });
     renderUnprotectedStatus(session);
     renderUnprotectedLogs(session.logs);
-    toast("攻击 POC 已启动");
+    toast("攻击演示已启动");
   }));
 
   $("#recoverKeyBtn").addEventListener("click", () => safeAction(async () => {
@@ -1153,7 +1525,7 @@ function bindEvents() {
 
   $("#stopUnprotectedBtn").addEventListener("click", () => safeAction(async () => {
     renderUnprotectedStatus(await apiPost("/api/unprotected/stop"));
-    toast("攻击 POC 已停止");
+    toast("攻击演示已停止");
   }));
 
   $("#clearUnprotectedBtn").addEventListener("click", clearUnprotectedLogs);
@@ -1231,7 +1603,9 @@ function bindEventSource() {
 function renderReportCharts() {
   const parsed = parseCollectedMeasurements();
   const connected = Boolean(state.sshSession?.connected);
-  const protection = connected ? currentTarget()?.protection : null;
+  const protection = state.activePage.startsWith("cache-") || state.activePage.startsWith("tlb-")
+    ? activeProtectionContext()
+    : connected ? currentTarget()?.protection : null;
   const empty = $("#compareEmptyState");
   const tlbSection = $("#tlbReportSection");
   const cacheSection = $("#cacheReportSection");

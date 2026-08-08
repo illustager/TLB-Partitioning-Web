@@ -2,6 +2,9 @@
 #include "mastik/synctrace.h"
 
 #include <stdlib.h>
+#include <stdio.h>
+
+bool FOUT = false;
 
 static const uint8_t sbox[256] = {
     0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
@@ -36,6 +39,24 @@ static void analyze(int64_t avg[256][1024], int *key, int *offset) {
     int64_t best_score = -1;
     int best_key = 0;
     int best_offset = 0;
+
+	if (FOUT) {
+		FILE *fp = fopen("output.csv", "w");
+
+		if (fp) {
+			for (int set = 0; set < CACHE_SETS; ++set) {
+				for (int byte = 0; byte < 16; ++byte) {
+					long long sc = 0;
+					for (int d = 0; d < 16; ++d) {
+						sc += avg[(byte << 4) | d][set];
+					}
+					fprintf(fp, "%lld,", sc);
+				}
+				fprintf(fp, "\n");
+			}
+			fclose(fp);
+		}
+	}
 
     for (int kg = 0; kg < 256; ++kg) {
         for (int off = 0; off < CACHE_SETS; ++off) {

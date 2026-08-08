@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
@@ -39,6 +40,8 @@ export class UnprotectedSession {
       lastMessage: null,
       lastCiphertext: null,
       lastEavesdrop: null,
+      recoveredKeyPartial: "",
+      cacheHeatmap: null,
       startedAt: null,
       endedAt: null
     };
@@ -76,6 +79,8 @@ export class UnprotectedSession {
       lastMessage: null,
       lastCiphertext: null,
       lastEavesdrop: null,
+      recoveredKeyPartial: "",
+      cacheHeatmap: null,
       startedAt: nowIso(),
       endedAt: null
     };
@@ -144,10 +149,13 @@ export class UnprotectedSession {
     this.status.recovery = recovery;
     this.status.recoveredKey = null;
     this.status.recoveredKeyValid = null;
+    this.status.recoveredKeyPartial = "";
+    this.status.cacheHeatmap = null;
     this.status.eveReady = false;
     this.malloryBuffer = "";
     this.emitStatus();
     this.log("mallory", `启动 Prime+Probe 密钥恢复 samples=${recovery.samples} sets=${recovery.cacheSets} lineShift=${recovery.lineShift} level=${recovery.cacheLevel} start=${recovery.start} count=${recovery.count}`);
+    this.clearCacheHeatmapFile();
     this.spawnRole(
       "mallory",
       [
@@ -168,6 +176,7 @@ export class UnprotectedSession {
     await this.stopRole("mallory");
     await this.stopRole("eve");
     this.status.recoveredKey = this.status.key;
+    this.status.recoveredKeyPartial = this.status.key;
     this.status.recoveredKeyValid = true;
     this.status.phase = "key-recovered";
     this.status.eveReady = false;
@@ -250,6 +259,8 @@ export class UnprotectedSession {
     this.status.phase = "stopped";
     this.status.recoveredKey = null;
     this.status.recoveredKeyValid = null;
+    this.status.recoveredKeyPartial = "";
+    this.status.cacheHeatmap = null;
     this.status.eveReady = false;
     this.status.lastMessage = null;
     this.status.lastCiphertext = null;
@@ -281,6 +292,9 @@ export class UnprotectedSession {
       this.log("system", `[${role}] exited code=${code ?? "null"} signal=${signal ?? "null"}`);
       if (role === "mallory" && /Operation not supported|Cannot allocate memory/i.test(output)) {
         this.log("system", "当前 WSL 环境不支持该 cache level 的 Mastik Prime+Probe，请使用 L1");
+      }
+      if (role === "mallory" && this.tryLoadCacheHeatmap()) {
+        this.emitStatus();
       }
       if (role === "mallory" && !expectedStop && !this.status.recoveredKey) {
         this.status.phase = "recover-failed";
@@ -357,6 +371,13 @@ export class UnprotectedSession {
     if (role !== "mallory") return;
 
     this.malloryBuffer += text;
+    const partial = this.malloryBuffer.match(/Recovered key:\s*([0-9a-fA-F]{2,32})/);
+    if (partial) {
+      this.status.recoveredKeyPartial = partial[1].toLowerCase();
+      this.tryLoadCacheHeatmap();
+      this.emitStatus();
+    }
+
     const match = this.malloryBuffer.match(/Recovered key:\s*([0-9a-fA-F]{32})/);
     if (!match) return;
 
@@ -485,6 +506,50 @@ export class UnprotectedSession {
     if (!cleaned.trim()) return "";
     if (/^wsl:/i.test(cleaned.trim())) return "";
     return cleaned;
+  }
+
+  tryLoadCacheHeatmap() {
+    const heatmap = this.readCacheHeatmap();
+    if (heatmap) {
+      this.status.cacheHeatmap = heatmap;
+      return true;
+    }
+    return false;
+  }
+
+  clearCacheHeatmapFile() {
+    const filePath = path.join(this.config.unprotected.workingDirectory, "output.csv");
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (error) {
+      this.log("system", `清理旧采样文件失败: ${error.message}`);
+    }
+  }
+
+  readCacheHeatmap() {
+    const filePath = path.join(this.config.unprotected.workingDirectory, "output.csv");
+    if (!fs.existsSync(filePath)) return null;
+    const rows = fs.readFileSync(filePath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.split(",").map((item) => item.trim()).filter(Boolean).map(Number).filter(Number.isFinite))
+      .filter((row) => row.length);
+    if (!rows.length) return null;
+    const cols = Math.max(...rows.map((row) => row.length));
+    const values = rows.map((row) => {
+      const padded = row.slice(0, cols);
+      while (padded.length < cols) padded.push(null);
+      return padded;
+    });
+    const flat = values.flat().filter(Number.isFinite);
+    if (!flat.length) return null;
+    return {
+      rows: values.length,
+      cols,
+      values,
+      min: Math.min(...flat),
+      max: Math.max(...flat),
+      updatedAt: nowIso()
+    };
   }
 
   emitStatus() {

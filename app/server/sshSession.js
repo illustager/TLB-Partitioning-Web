@@ -92,7 +92,7 @@ export class SshSession {
     this.client = client;
 
     client.on("ready", () => {
-      client.shell({ term: "xterm-color", cols: 120, rows: 36 }, (error, stream) => {
+      client.shell({ term: "xterm-color", cols: 140, rows: 48 }, (error, stream) => {
         if (error) {
           this.fail(error);
           return;
