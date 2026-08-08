@@ -282,77 +282,104 @@
               <div class="panel-head compact">
                 <div>
                   <span class="eyebrow">攻击拓扑</span>
-                  <h3>共享 Cache 攻击原理</h3>
                 </div>
                 <span class="badge idle" id="unprotectedPhaseBadge">待机</span>
               </div>
-              <div class="cache-topology" aria-label="共享 Cache Prime+Probe 攻击原理图">
-                <div class="cache-defense-map cache-attack-map">
-                  <section class="cache-defense-cache original">
-                    <div class="cache-defense-title">无防护共享 Cache</div>
-                    <div class="cache-defense-header">
-                      <span></span>
-                      <strong>Way0</strong>
-                      <strong>Way1</strong>
-                    </div>
-                    <div class="cache-defense-grid">
-                      <span>Set0</span><b></b><b></b>
-                      <span>Set1</span><b></b><b></b>
-                      <span>Set2</span><b></b><b></b>
-                      <span>...</span><b class="ellipsis">...</b><b class="ellipsis">...</b>
-                      <span>Set31</span><b></b><b></b>
-                    </div>
-                  </section>
+              <div class="cache-topology" aria-label="Cache 攻击连接拓扑图">
+                <svg class="attack-topology-svg" viewBox="0 0 580 195" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <marker id="ahBlue" markerWidth="4" markerHeight="3.5" refX="4" refY="1.75" orient="auto">
+                      <path d="M0 0 L4 1.75 L0 3.5 Z" fill="#276d9b"/>
+                    </marker>
+                    <marker id="ahRed" markerWidth="4" markerHeight="3.5" refX="4" refY="1.75" orient="auto">
+                      <path d="M0 0 L4 1.75 L0 3.5 Z" fill="#b23a32"/>
+                    </marker>
+                    <marker id="ahViolet" markerWidth="4" markerHeight="3.5" refX="4" refY="1.75" orient="auto">
+                      <path d="M0 0 L4 1.75 L0 3.5 Z" fill="#6750a4"/>
+                    </marker>
+                    <marker id="ahOrange" markerWidth="4" markerHeight="3.5" refX="4" refY="1.75" orient="auto">
+                      <path d="M0 0 L4 1.75 L0 3.5 Z" fill="#d97012"/>
+                    </marker>
+                    <marker id="ahGray" markerWidth="4" markerHeight="3.5" refX="4" refY="1.75" orient="auto">
+                      <path d="M0 0 L4 1.75 L0 3.5 Z" fill="#657064"/>
+                    </marker>
+                  </defs>
 
-                  <div class="cache-defense-switch attack">
-                    <span>Prime</span>
-                    <strong>Probe</strong>
-                    <i>→</i>
-                  </div>
+                  <g transform="translate(44, 0)">
 
-                  <section class="cache-defense-cache observed">
-                    <div class="cache-defense-title">攻击观测</div>
-                    <div class="cache-defense-header">
-                      <span></span>
-                      <strong>Mallory</strong>
-                      <strong>Alice</strong>
-                    </div>
-                    <div class="cache-defense-grid">
-                      <span>Set0</span><b class="domain-zero"></b><b class="domain-one"></b>
-                      <span>Set1</span><b></b><b></b>
-                      <span>Set2</span><b class="domain-zero"></b><b class="domain-one"></b>
-                      <span>...</span><b class="ellipsis">...</b><b class="ellipsis">...</b>
-                      <span>Set31</span><b></b><b></b>
-                    </div>
-                  </section>
-                </div>
+                  <!-- 客户端 -->
+                  <rect x="8" y="6" width="240" height="183" rx="7" fill="#fafdf7" stroke="#98b395" stroke-width="1.3"/>
+                  <rect x="8" y="6" width="240" height="26" rx="7" fill="#eef5ea"/>
+                  <rect x="8" y="22" width="240" height="10" fill="#eef5ea"/>
+                  <text x="128" y="23" text-anchor="middle" font-size="11" font-weight="800" fill="#2d4a28">客户端</text>
 
-                <div class="cache-address-map cache-attack-address" aria-label="Cache 攻击地址字段划分">
-                  <div class="cache-address-row">
-                    <span>访存地址</span>
-                    <b class="tag">Tag 31:11</b>
-                    <b class="set">Set Index 10:6</b>
-                    <b class="offset">Offset 5:0</b>
-                  </div>
-                </div>
-                <div class="cache-signal-strip">
-                  <div>
-                    <span>01</span>
-                    <strong>填满共享 Way</strong>
-                  </div>
-                  <div>
-                    <span>02</span>
-                    <strong>Alice 触发替换</strong>
-                  </div>
-                  <div>
-                    <span>03</span>
-                    <strong>Probe 得到时延矩阵</strong>
-                  </div>
-                  <div>
-                    <span>04</span>
-                    <strong>恢复密钥首字节</strong>
-                  </div>
-                </div>
+                  <!-- Cache -->
+                  <rect x="22" y="38" width="34" height="142" rx="4" fill="#fffdf5" stroke="#c9a44b" stroke-width="1.1"/>
+                  <text x="39" y="52" text-anchor="middle" font-size="7" font-weight="700" fill="#8a6d1c">Cache</text>
+                  <!-- Set 行 -->
+                  <rect x="26" y="58" width="26" height="11" rx="2" fill="rgba(201,164,75,0.08)" stroke="#c9a44b" stroke-width="0.5"/>
+                  <text x="39" y="66" text-anchor="middle" font-size="6" fill="#8a6d1c">S0</text>
+                  <rect x="26" y="73" width="26" height="11" rx="2" fill="rgba(201,164,75,0.08)" stroke="#c9a44b" stroke-width="0.5"/>
+                  <text x="39" y="81" text-anchor="middle" font-size="6" fill="#8a6d1c">S1</text>
+                  <text x="39" y="95" text-anchor="middle" font-size="6" fill="#8a6d1c">…</text>
+                  <rect x="26" y="101" width="26" height="11" rx="2" fill="rgba(201,164,75,0.25)" stroke="#c9a44b" stroke-width="0.7"/>
+                  <text x="39" y="109" text-anchor="middle" font-size="6" font-weight="800" fill="#8a6d1c">Sk</text>
+                  <rect x="26" y="116" width="26" height="11" rx="2" fill="rgba(201,164,75,0.08)" stroke="#c9a44b" stroke-width="0.5"/>
+                  <text x="39" y="124" text-anchor="middle" font-size="6" fill="#8a6d1c">Sk+1</text>
+                  <text x="39" y="146" text-anchor="middle" font-size="6" fill="#8a6d1c">…</text>
+
+                  <!-- Alice -->
+                  <rect x="100" y="42" width="68" height="28" rx="6" fill="#e7f3f7" stroke="#a3c6d2" stroke-width="1.1"/>
+                  <text x="134" y="60" text-anchor="middle" font-size="11" font-weight="800" fill="#1a4d5e">Alice</text>
+
+                  <!-- Mallory -->
+                  <rect x="100" y="148" width="68" height="28" rx="6" fill="#fceeeb" stroke="#cea29d" stroke-width="1.1"/>
+                  <text x="134" y="166" text-anchor="middle" font-size="11" font-weight="800" fill="#6b2a22">Mallory</text>
+
+                  <!-- 服务端 -->
+                  <rect x="310" y="6" width="170" height="84" rx="7" fill="#fafdf7" stroke="#98b395" stroke-width="1.3"/>
+                  <rect x="310" y="6" width="170" height="26" rx="7" fill="#eef5ea"/>
+                  <rect x="310" y="22" width="170" height="10" fill="#eef5ea"/>
+                  <text x="395" y="23" text-anchor="middle" font-size="11" font-weight="800" fill="#2d4a28">服务端</text>
+
+                  <!-- Bob -->
+                  <rect x="358" y="42" width="68" height="28" rx="6" fill="#e3f2e3" stroke="#a3c8a3" stroke-width="1.1"/>
+                  <text x="392" y="60" text-anchor="middle" font-size="11" font-weight="800" fill="#235c23">Bob</text>
+
+                  <!-- Eve -->
+                  <rect x="358" y="128" width="68" height="28" rx="6" fill="#f7f4ff" stroke="#6750a4" stroke-width="1.1" stroke-dasharray="4 3"/>
+                  <text x="392" y="146" text-anchor="middle" font-size="11" font-weight="800" fill="#4a3890">Eve</text>
+
+                  <!-- ==== 连线 ==== -->
+
+                  <!-- Alice / Mallory → Cache（访存） -->
+                  <path d="M100 56 C84 56, 72 76, 52 106"
+                        fill="none" stroke="#657064" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ahGray)"/>
+                  <path d="M100 162 C84 162, 72 128, 52 108"
+                        fill="none" stroke="#657064" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ahGray)"/>
+                  <text x="70" y="122" font-size="9" font-weight="700" fill="#657064">访存</text>
+
+                  <!-- Mallory → Alice（Prime+Probe） -->
+                  <line x1="134" y1="148" x2="134" y2="70"
+                        stroke="#b23a32" stroke-width="1.4" stroke-dasharray="4 3" stroke-linecap="round" marker-end="url(#ahRed)"/>
+                  <text x="142" y="113" font-size="9" font-weight="700" fill="#b23a32">Prime+Probe</text>
+
+                  <!-- Alice → Bob（加密通信） -->
+                  <line x1="168" y1="55" x2="358" y2="55"
+                        stroke="#276d9b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ahBlue)"/>
+                  <text x="263" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#276d9b">加密通信</text>
+
+                  <!-- 窃听（从加密通信线分出，垂直指向 Eve 顶部中央） -->
+                  <path d="M280 55 C280 72, 392 98, 392 128"
+                        fill="none" stroke="#6750a4" stroke-width="1.2" stroke-dasharray="4 3" stroke-linejoin="round" marker-end="url(#ahViolet)"/>
+                  <text x="282" y="94" font-size="9" font-weight="700" fill="#6750a4">窃听</text>
+
+                  <!-- Mallory → Eve（披露密钥） -->
+                  <path d="M168 162 C250 162, 290 150, 358 142"
+                        fill="none" stroke="#d97012" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ahOrange)"/>
+                  <text x="240" y="168" font-size="9" font-weight="700" fill="#d97012">披露密钥</text>
+                  </g>
+                </svg>
               </div>
             </article>
 

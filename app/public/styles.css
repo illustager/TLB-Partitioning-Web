@@ -533,7 +533,7 @@ h3 { font-size: 16px; }
 
 .cache-console-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.25fr) minmax(220px, 0.75fr) minmax(170px, 0.55fr) minmax(170px, 0.55fr);
+  grid-template-columns: minmax(200px, 2fr) minmax(160px, 1fr) minmax(160px, 2fr) minmax(120px, 1fr) minmax(80px, 0.8fr);
   gap: 12px;
   align-items: end;
 }
@@ -744,14 +744,16 @@ h3 { font-size: 16px; }
 
 .cache-topology {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  min-height: 332px;
-  padding: 14px 12px 12px;
+  padding: 6px;
   border: 1px solid #d8d6c5;
   border-radius: 10px;
   background: #fbfaf4;
+}
+
+.attack-topology-svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .cache-process-lane {
