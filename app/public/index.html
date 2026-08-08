@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>芯域双垒 侧信道防御系统演示平台</title>
     <link rel="icon" href="./assets/232dad00af3d6c3f1071ad852e45e09d.png" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260807-tlb-defense-layout" />
   </head>
   <body>
     <div class="app-shell">
@@ -21,43 +21,45 @@
         <nav class="nav-list">
           <button class="nav-item active" data-view="overview">
             <span class="nav-icon">⌂</span>
-            <span>概览</span>
+            <span>作品介绍</span>
           </button>
           <button class="nav-item" data-view="connections">
             <span class="nav-icon">↔</span>
-            <span>连接</span>
+            <span>系统配置</span>
           </button>
-          <button class="nav-item" data-view="unprotected">
-            <span class="nav-icon">!</span>
-            <span>攻击 POC</span>
-          </button>
-          <button class="nav-item" data-view="protected">
-            <span class="nav-icon">$</span>
-            <span>防护采集</span>
-          </button>
-          <button class="nav-item" data-view="compare">
-            <span class="nav-icon">≋</span>
-            <span>结果对比</span>
-          </button>
+
+          <div class="nav-group">
+            <div class="nav-group-title"><span class="nav-icon">C</span><span>Cache防护</span></div>
+            <button class="nav-item nav-subitem" data-view="cache-attack"><span>Cache攻击</span></button>
+            <button class="nav-item nav-subitem" data-view="cache-protection"><span>Cache防护</span></button>
+            <button class="nav-item nav-subitem" data-view="cache-performance"><span>性能指标</span></button>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group-title"><span class="nav-icon">T</span><span>TLB防护</span></div>
+            <button class="nav-item nav-subitem" data-view="tlb-attack"><span>TLB攻击</span></button>
+            <button class="nav-item nav-subitem" data-view="tlb-protection"><span>TLB防护</span></button>
+            <button class="nav-item nav-subitem" data-view="tlb-performance"><span>性能指标</span></button>
+          </div>
         </nav>
 
         <div class="sidebar-footer">
           <span class="mini-label">演示状态</span>
           <div class="config-line"><span>后端</span><strong id="backendMini">检查中</strong></div>
-          <div class="config-line"><span>当前连接</span><strong id="sideStatus">未连接</strong></div>
-          <div class="config-line"><span>攻击 POC</span><strong id="scriptStateMini">待机</strong></div>
+          <div class="config-line"><span>当前配置</span><strong id="sideStatus">未配置</strong></div>
+          <div class="config-line"><span>攻击状态</span><strong id="scriptStateMini">待机</strong></div>
         </div>
       </aside>
 
       <main class="workspace">
         <header class="topbar">
           <div>
-            <h1 id="pageTitle">概览</h1>
+            <h1 id="pageTitle">作品介绍</h1>
           </div>
           <div class="status-strip" aria-label="系统状态">
             <span class="status-pill idle" id="backendStatus"><i></i> 后端检查中</span>
-            <span class="status-pill offline" id="sshStatus"><i></i> 远程未连接</span>
-            <span class="status-pill idle" id="unprotectedStatus"><i></i> 攻击 POC 待机</span>
+            <span class="status-pill offline" id="sshStatus"><i></i> 远程未配置</span>
+            <span class="status-pill idle" id="unprotectedStatus"><i></i> 攻击演示待机</span>
             <span class="status-pill idle" id="resultStatus"><i></i> 结果待采集</span>
           </div>
         </header>
@@ -73,8 +75,8 @@
                 面向侧信道防御成果展示，集中呈现 Cache 与 TLB 两类隔离防护能力、在线采集流程和结果对比。
               </p>
               <div class="hero-actions">
-                <button class="btn primary" data-jump="connections">查看连接状态</button>
-                <button class="btn ghost" data-jump="protected">开始演示采集</button>
+                <button class="btn primary" data-jump="connections">查看系统配置</button>
+                <button class="btn ghost" data-jump="cache-protection">进入Cache防护</button>
               </div>
             </div>
             <figure class="board-figure">
@@ -95,15 +97,15 @@
                 <article class="stat-card secure">
                   <span>后端桥接</span>
                   <strong id="overviewBackend">检查中</strong>
-                  <small>Node.js 负责攻击 POC、远程 SSH 和 SSE 事件转发。</small>
+                  <small>Node.js 负责攻击演示、远程 SSH 和 SSE 事件转发。</small>
                 </article>
                 <article class="stat-card warn">
-                  <span>当前连接</span>
-                  <strong id="overviewActiveTarget">未连接</strong>
+                  <span>当前配置</span>
+                  <strong id="overviewActiveTarget">未配置</strong>
                   <small>Cache FPGA / TLB FPGA</small>
                 </article>
                 <article class="stat-card">
-                  <span>攻击 POC</span>
+                  <span>攻击状态</span>
                   <strong id="overviewScript">待机</strong>
                   <small>在本机 WSL Ubuntu 中启动 app / Bob / Mallory / Eve。</small>
                 </article>
@@ -142,9 +144,9 @@
           <section class="panel connection-panel">
             <div class="panel-head">
               <div>
-                <h2>连接配置</h2>
+                <h2>当前配置</h2>
               </div>
-              <span class="badge muted" id="sshBadge">未连接</span>
+              <span class="badge muted" id="sshBadge">未配置</span>
             </div>
 
             <div class="connection-toolbar">
@@ -153,7 +155,7 @@
                 <select id="targetSelect"></select>
               </label>
               <div class="button-row">
-                <button class="btn primary" id="connectBtn" type="button">保存并连接</button>
+                <button class="btn primary" id="connectBtn" type="button">配置</button>
               </div>
             </div>
 
@@ -190,13 +192,14 @@
         </section>
 
         <section class="view" id="unprotected">
-          <section class="panel control-panel">
+          <section class="panel control-panel cache-attack-console">
             <div class="panel-head">
               <div>
-                <h2>攻击 POC 控制台</h2>
+                <span class="eyebrow">控制台</span>
+                <h2 id="attackPageTitle">Cache攻击</h2>
               </div>
               <div class="button-row">
-                <button class="btn primary" id="startUnprotectedBtn">启动攻击 POC</button>
+                <button class="btn primary" id="startUnprotectedBtn">启动攻击演示</button>
                 <button class="btn danger-soft" id="recoverKeyBtn">恢复密钥</button>
                 <button class="btn ghost" id="demoRecoverKeyBtn">快速演示恢复</button>
                 <button class="btn ghost" id="eavesdropBtn">窃听</button>
@@ -205,96 +208,350 @@
               </div>
             </div>
 
-            <div class="unprotected-form">
+            <div class="cache-console-grid">
               <label class="wide">
                 AES Key
                 <input id="unprotectedKey" value="00112233445566778899aabbccddeeff" spellcheck="false" />
               </label>
-              <label>
-                逻辑核
-                <input id="unprotectedCore" value="0" inputmode="numeric" />
-              </label>
-              <label>
-                Samples
-                <input id="mallorySamples" value="1000000" inputmode="numeric" />
-              </label>
-              <label>
-                Cache Sets
-                <input id="malloryCacheSets" value="64" inputmode="numeric" />
-              </label>
-              <label>
-                Line Shift
-                <input id="malloryLineShift" value="4" inputmode="numeric" />
-              </label>
-              <label>
-                Start Byte
-                <input id="malloryStart" value="0" inputmode="numeric" />
-              </label>
-              <label>
-                Byte Count
-                <input id="malloryCount" value="16" inputmode="numeric" />
-              </label>
-              <label>
-                Cache Level
-                <select id="malloryCacheLevel">
-                  <option value="1">L1</option>
-                </select>
-              </label>
+              <div class="cache-console-metric leaked-key">
+                <span>泄露密钥</span>
+                <strong id="recoveredKey">--</strong>
+              </div>
+              <form class="message-form" id="aliceMessageForm">
+                <label>
+                  Message
+                  <span class="inline-message-input">
+                    <input id="aliceMessageInput" autocomplete="off" placeholder="Alice 发送给 Bob 的明文消息" />
+                    <button class="btn primary" type="submit">发送</button>
+                  </span>
+                </label>
+              </form>
+              <div class="cache-console-metric">
+                <span>窃听结果</span>
+                <strong id="eavesdropPreview">--</strong>
+              </div>
+              <div class="cache-console-metric">
+                <span>阶段</span>
+                <strong id="attackPhase">待机</strong>
+              </div>
+              <div class="cache-console-metric">
+                <span>Eve 状态</span>
+                <strong id="eveState">未启用</strong>
+              </div>
             </div>
 
-            <form class="message-form" id="aliceMessageForm">
-              <input id="aliceMessageInput" autocomplete="off" placeholder="Alice 消息，长文本会自动分块发送" />
-              <button class="btn primary" type="submit">发送</button>
-            </form>
+            <details class="cache-advanced">
+              <summary>采样参数</summary>
+              <div class="unprotected-form">
+                <label>
+                  逻辑核
+                  <input id="unprotectedCore" value="0" inputmode="numeric" />
+                </label>
+                <label>
+                  Samples
+                  <input id="mallorySamples" value="1000000" inputmode="numeric" />
+                </label>
+                <label>
+                  Cache Sets
+                  <input id="malloryCacheSets" value="64" inputmode="numeric" />
+                </label>
+                <label>
+                  Line Shift
+                  <input id="malloryLineShift" value="4" inputmode="numeric" />
+                </label>
+                <label>
+                  Start Byte
+                  <input id="malloryStart" value="0" inputmode="numeric" />
+                </label>
+                <label>
+                  Byte Count
+                  <input id="malloryCount" value="16" inputmode="numeric" />
+                </label>
+                <label>
+                  Cache Level
+                  <select id="malloryCacheLevel">
+                    <option value="1">L1</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+          </section>
 
-            <div class="evidence-strip">
-              <div><span>恢复密钥</span><strong id="recoveredKey">--</strong></div>
-              <div><span>Eve 状态</span><strong id="eveState">未启用</strong></div>
-              <div><span>阶段</span><strong id="attackPhase">待机</strong></div>
-              <div><span>窃听结果</span><strong id="eavesdropPreview">--</strong></div>
+          <section class="cache-attack-main">
+            <article class="panel cache-topology-panel">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">攻击拓扑</span>
+                  <h3>共享 Cache 攻击原理</h3>
+                </div>
+                <span class="badge idle" id="unprotectedPhaseBadge">待机</span>
+              </div>
+              <div class="cache-topology" aria-label="共享 Cache Prime+Probe 攻击原理图">
+                <div class="cache-defense-map cache-attack-map">
+                  <section class="cache-defense-cache original">
+                    <div class="cache-defense-title">无防护共享 Cache</div>
+                    <div class="cache-defense-header">
+                      <span></span>
+                      <strong>Way0</strong>
+                      <strong>Way1</strong>
+                    </div>
+                    <div class="cache-defense-grid">
+                      <span>Set0</span><b></b><b></b>
+                      <span>Set1</span><b></b><b></b>
+                      <span>Set2</span><b></b><b></b>
+                      <span>...</span><b class="ellipsis">...</b><b class="ellipsis">...</b>
+                      <span>Set31</span><b></b><b></b>
+                    </div>
+                  </section>
+
+                  <div class="cache-defense-switch attack">
+                    <span>Prime</span>
+                    <strong>Probe</strong>
+                    <i>→</i>
+                  </div>
+
+                  <section class="cache-defense-cache observed">
+                    <div class="cache-defense-title">攻击观测</div>
+                    <div class="cache-defense-header">
+                      <span></span>
+                      <strong>Mallory</strong>
+                      <strong>Alice</strong>
+                    </div>
+                    <div class="cache-defense-grid">
+                      <span>Set0</span><b class="domain-zero"></b><b class="domain-one"></b>
+                      <span>Set1</span><b></b><b></b>
+                      <span>Set2</span><b class="domain-zero"></b><b class="domain-one"></b>
+                      <span>...</span><b class="ellipsis">...</b><b class="ellipsis">...</b>
+                      <span>Set31</span><b></b><b></b>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="cache-address-map cache-attack-address" aria-label="Cache 攻击地址字段划分">
+                  <div class="cache-address-row">
+                    <span>访存地址</span>
+                    <b class="tag">Tag 31:11</b>
+                    <b class="set">Set Index 10:6</b>
+                    <b class="offset">Offset 5:0</b>
+                  </div>
+                </div>
+                <div class="cache-signal-strip">
+                  <div>
+                    <span>01</span>
+                    <strong>填满共享 Way</strong>
+                  </div>
+                  <div>
+                    <span>02</span>
+                    <strong>Alice 触发替换</strong>
+                  </div>
+                  <div>
+                    <span>03</span>
+                    <strong>Probe 得到时延矩阵</strong>
+                  </div>
+                  <div>
+                    <span>04</span>
+                    <strong>恢复密钥首字节</strong>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel cache-log-panel">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">运行日志</span>
+                  <h3>Alice / Bob / Mallory / Eve</h3>
+                </div>
+              </div>
+              <div class="cache-log-grid">
+                <div class="cache-log-cell"><span>Alice</span><pre class="log-window" id="logAlice">[idle] 等待发送消息</pre></div>
+                <div class="cache-log-cell"><span>Bob</span><pre class="log-window" id="logBob">[idle] 等待 Bob 解密输出</pre></div>
+                <div class="cache-log-cell"><span>Mallory</span><pre class="log-window" id="logMallory">[idle] 等待 Prime+Probe 输出</pre></div>
+                <div class="cache-log-cell"><span>Eve</span><pre class="log-window" id="logEve">[idle] 等待窃听输出</pre></div>
+              </div>
+            </article>
+          </section>
+
+          <section class="panel cache-heatmap-panel">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">攻击结果分析</span>
+                <h2>第一字节采样热力图</h2>
+              </div>
+              <span class="badge muted" id="cacheHeatmapBadge">等待 output.csv</span>
+            </div>
+            <div class="cache-heatmap-layout">
+              <svg class="cache-heatmap" id="cacheHeatmap" viewBox="0 0 760 380" role="img" aria-label="Cache 第一字节采样热力图"></svg>
+              <div class="cache-heatmap-copy">
+                <strong id="cacheHeatmapResult">等待 Mallory 生成 output.csv</strong>
+                <p>横坐标为测试输入，纵坐标为 Cache Set 索引，亮度表示采样时间偏移。亮色块形成稳定模式后，即可推断 AES T 表访问与密钥第一字节的关系。</p>
+                <div class="cache-heatmap-scale"><span></span><b>低时延</b><b>高时延</b></div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="tlbAttack">
+          <section class="panel tlb-attack-header">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">TLB SIDE-CHANNEL DEMO</span>
+                <h2>TLB攻击演示</h2>
+                <p class="tlb-attack-intro">从时延基线、Prime+Probe 观测到跨进程 Secret 重构，实时展示无防护系统的攻击链路。</p>
+              </div>
+              <div class="button-row">
+                <button class="btn primary" id="runTlbAttackBtn" type="button">启动TLB攻击</button>
+                <button class="btn ghost" data-jump="connections">系统配置</button>
+              </div>
+            </div>
+            <div class="tlb-attack-status-row">
+              <span class="badge muted" id="tlbAttackTarget">未配置</span>
+              <span class="badge idle" id="tlbAttackStageBadge">等待攻击</span>
+              <span class="badge muted" id="tlbAttackVerdict">等待真实输出</span>
             </div>
           </section>
 
-          <div class="role-grid">
-            <article class="panel role-card">
+          <div class="tlb-attack-grid">
+            <section class="panel tlb-story-panel">
               <div class="panel-head compact">
-                <h3>Alice</h3>
-                <span class="badge muted">sender</span>
+                <div>
+                  <span class="eyebrow">ATTACK FLOW</span>
+                  <h3>攻击流程</h3>
+                </div>
               </div>
-              <pre class="log-window" id="logAlice">[idle] 等待发送消息</pre>
-            </article>
-            <article class="panel role-card">
+              <ol class="tlb-story-list" id="tlbAttackStageList">
+                <li data-tlb-stage="0"><span class="tlb-step-number">01</span><div><strong>建立时延基线</strong><small>rdcycle 与本地访问开销</small></div></li>
+                <li data-tlb-stage="1"><span class="tlb-step-number">02</span><div><strong>测量 TLB Hit</strong><small>确定命中访问分布</small></div></li>
+                <li data-tlb-stage="2"><span class="tlb-step-number">03</span><div><strong>制造 Evict</strong><small>观察未命中后的加载时延</small></div></li>
+                <li data-tlb-stage="3"><span class="tlb-step-number">04</span><div><strong>Prime + Probe</strong><small>比较子进程 Idle 与 Thrash</small></div></li>
+                <li data-tlb-stage="5"><span class="tlb-step-number">05</span><div><strong>重构 Secret</strong><small>验证 TX 与 RX 的位一致性</small></div></li>
+              </ol>
+            </section>
+
+            <section class="panel tlb-principle-panel">
               <div class="panel-head compact">
-                <h3>Bob</h3>
-                <span class="badge muted">receiver</span>
+                <div>
+                  <span class="eyebrow">ATTACK PRINCIPLE</span>
+                  <h3>共享 TLB 攻击原理</h3>
+                </div>
+                <div class="button-row">
+                  <span class="badge muted">2 Set × 2 Way</span>
+                  <span class="badge muted" id="tlbSharingBadge">等待共享观测</span>
+                </div>
               </div>
-              <pre class="log-window" id="logBob">[idle] 等待 Bob 解密输出</pre>
-            </article>
-            <article class="panel role-card attacker-card">
+              <div class="tlb-diagram-stage">
+                <div class="tlb-diagram tlb-attack-diagram" aria-label="共享 TLB 攻击原理示意图">
+                  <div class="tlb-process-lane attacker">
+                    <span class="tlb-domain-label">攻击者</span>
+                    <strong>Mallory</strong>
+                    <span class="tlb-action" data-tlb-role="prime">Prime</span>
+                    <span class="tlb-action" data-tlb-role="probe">Probe Δt</span>
+                  </div>
+                  <div class="tlb-map-arrow attacker-map" aria-hidden="true">
+                    <span>Prime</span>
+                    <i>⟷</i>
+                  </div>
+                  <div class="tlb-set-stack tlb-attack-set-stack">
+                    <div class="tlb-dtlb-title">共享 DTLB</div>
+                    <div class="tlb-index-flow" aria-hidden="true">
+                      <span>VA</span>
+                      <i>Index</i>
+                      <strong>Set k</strong>
+                    </div>
+                    <div class="tlb-target-set" data-tlb-set="0">
+                      <span class="tlb-target-set-label">目标 Set k</span>
+                      <b class="tlb-target-way mallory-way" data-tlb-set="0" data-tlb-way="0">
+                        <small>Way0</small>
+                        <span>VA(M)</span>
+                      </b>
+                      <b class="tlb-target-way victim-way" data-tlb-set="0" data-tlb-way="1">
+                        <small>Way1</small>
+                        <span>VA(S)</span>
+                      </b>
+                    </div>
+                    <div class="tlb-probe-meter" aria-label="真实时延阈值示例">
+                      <span>Hit 71</span>
+                      <strong>TH 151</strong>
+                      <span>Miss 232</span>
+                    </div>
+                  </div>
+                  <div class="tlb-map-arrow victim-map" aria-hidden="true">
+                    <span>VA(S)</span>
+                    <i>⟵</i>
+                  </div>
+                  <div class="tlb-process-lane victim">
+                    <span class="tlb-domain-label">受害者</span>
+                    <strong>Victim</strong>
+                    <span class="tlb-action" data-tlb-role="secret">VA(S)</span>
+                    <span class="tlb-action" data-tlb-role="victim-mode">TLB Lookup</span>
+                  </div>
+                  <div class="tlb-diagram-state" id="tlbDiagramState">建立时延基线</div>
+                </div>
+                <div class="tlb-static-samples" aria-label="TLB 攻击真实数据示例">
+                  <article>
+                    <span>示例数据</span>
+                    <strong id="tlbDemoMetricMain">Hit P50 = 71 cycles</strong>
+                  </article>
+                  <article>
+                    <span>对比信号</span>
+                    <strong id="tlbDemoMetricCompare">Miss P50 = 232 cycles</strong>
+                  </article>
+                  <article>
+                    <span>判定阈值</span>
+                    <strong id="tlbDemoMetricVerdict">TH = 151 cycles</strong>
+                  </article>
+                </div>
+                <div class="tlb-architecture-footer">
+                  <p class="tlb-explanation" id="tlbAttackExplanation">VA(S) → DTLB；Probe ← Δt。</p>
+                  <div class="tlb-guide-controls" aria-label="原理图讲解翻页">
+                    <button class="icon-btn tlb-page-btn tlb-page-prev" id="tlbGuidePrevBtn" type="button" title="上一步讲解" aria-label="上一步讲解">&lt;</button>
+                    <button class="icon-btn tlb-page-btn tlb-page-next" id="tlbGuideNextBtn" type="button" title="下一步讲解" aria-label="下一步讲解">&gt;</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel tlb-evidence-panel">
               <div class="panel-head compact">
-                <h3>Mallory / Eve</h3>
-                <span class="badge bad">observer</span>
+                <div>
+                  <span class="eyebrow">LIVE EVIDENCE</span>
+                  <h3>关键测量</h3>
+                </div>
               </div>
-              <pre class="log-window" id="logObserver">[idle] 等待 Prime+Probe 与窃听输出</pre>
-            </article>
+              <div class="tlb-evidence-list">
+                <div><span>Hit P50</span><strong id="tlbHitP50">--</strong><small>cycles</small></div>
+                <div><span>Miss P50</span><strong id="tlbMissP50">--</strong><small>cycles</small></div>
+                <div><span>Threshold</span><strong id="tlbThreshold">--</strong><small>cycles</small></div>
+                <div><span>Idle / Thrash</span><strong id="tlbIdleThrashDelta">--</strong><small>p50 delta</small></div>
+                <div><span>SID parent / child</span><strong id="tlbSidValue">--</strong><small>domain</small></div>
+                <div><span>Bit Match</span><strong id="tlbBitMatch">--</strong><small>secret reproduction</small></div>
+              </div>
+            </section>
           </div>
 
-          <section class="panel">
-            <div class="panel-head">
+          <section class="panel tlb-reproduction-panel">
+            <div class="panel-head compact">
               <div>
-                <span class="eyebrow">事件时间线</span>
-                <h2>攻击链路</h2>
+                <span class="eyebrow">CROSS-PROCESS SECRET REPRODUCTION</span>
+                <h3>Secret 重构结果</h3>
               </div>
-              <span class="badge idle" id="unprotectedPhaseBadge">待机</span>
+              <span class="badge muted" id="tlbReproductionBadge">等待重构</span>
             </div>
-            <ol class="timeline" id="attackTimeline">
-              <li data-step="start"><span></span>启动 app / Bob</li>
-              <li data-step="send"><span></span>Alice 通信</li>
-              <li data-step="recover"><span></span>Mallory 采样</li>
-              <li data-step="key"><span></span>恢复密钥</li>
-              <li data-step="eve"><span></span>启动 Eve</li>
-              <li data-step="result"><span></span>窃听明文</li>
-            </ol>
+            <div class="tlb-bits-grid">
+              <div><span>TX · 原始秘密数据</span><code id="tlbTxBits">等待真实输出</code></div>
+              <div><span>RX · 攻击者获取数据</span><code id="tlbRxBits">等待真实输出</code></div>
+            </div>
+          </section>
+
+          <section class="panel tlb-terminal-panel">
+            <div class="panel-head compact">
+              <div>
+                <span class="eyebrow">RAW ATTACK OUTPUT</span>
+                <h3>真实攻击输出</h3>
+              </div>
+              <button class="icon-btn" id="copyTlbAttackBtn" title="复制 TLB 攻击输出">⧉</button>
+            </div>
+            <pre class="tlb-attack-terminal" id="tlbAttackOutput">等待 TLB 攻击脚本输出...</pre>
           </section>
         </section>
 
@@ -303,13 +560,13 @@
             <section class="panel collection-panel">
               <div class="panel-head">
                 <div>
-                  <h2>防护采集</h2>
+                  <h2 id="protectedPageTitle">防护采集</h2>
                 </div>
-                <button class="btn ghost" data-jump="connections">连接页</button>
+                <button class="btn ghost" data-jump="connections">系统配置</button>
               </div>
 
               <div class="metric-row two">
-                <div><span>当前目标</span><strong id="protectedActiveTarget">未连接</strong></div>
+                <div><span>当前目标</span><strong id="protectedActiveTarget">未配置</strong></div>
                 <div><span>连接方式</span><strong id="protectedConnectionKind">--</strong></div>
               </div>
 
@@ -329,7 +586,7 @@
               <div class="panel-head">
                 <div>
                   <span class="eyebrow">SSH 终端</span>
-                  <h2>远程输出</h2>
+                  <h2>交互终端</h2>
                 </div>
                 <div class="button-row">
                   <button class="icon-btn" id="copyBtn" title="复制输出">⧉</button>
@@ -338,13 +595,165 @@
               </div>
               <pre class="terminal" id="terminalOutput">等待远程连接...</pre>
               <form class="terminal-input" id="terminalForm">
-                <input id="terminalInput" autocomplete="off" placeholder="手动输入命令，例如 ./coremark.exe" />
+                <input id="terminalInput" autocomplete="off" placeholder="输入远程命令，例如 ./coremark.exe 或 bash ./test_bench.sh" />
                 <button class="btn primary" type="submit">发送</button>
               </form>
             </section>
+            <section class="panel cache-defense-architecture" id="cacheDefenseArchitecture">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">DEFENSE ARCHITECTURE</span>
+                  <h2>Cache Way 分区防护架构</h2>
+                </div>
+                <div class="button-row">
+                  <span class="badge muted">32 Set × 2 Way</span>
+                  <span class="badge good">bit23 分域</span>
+                </div>
+              </div>
+
+              <div class="cache-defense-map" aria-label="Cache Way 分区防护架构示意图">
+                <section class="cache-defense-cache original">
+                  <div class="cache-defense-title">原始共享 Cache</div>
+                  <div class="cache-defense-header">
+                    <span></span>
+                    <strong>Way0</strong>
+                    <strong>Way1</strong>
+                  </div>
+                  <div class="cache-defense-grid">
+                    <span>Set0</span><b></b><b></b>
+                    <span>Set1</span><b></b><b></b>
+                    <span>Set2</span><b></b><b></b>
+                    <span>...</span><b class="ellipsis">...</b><b class="ellipsis">...</b>
+                    <span>Set31</span><b></b><b></b>
+                  </div>
+                </section>
+
+                <div class="cache-defense-switch">
+                  <span>物理地址 bit23</span>
+                  <strong>Domain Select</strong>
+                  <i>→</i>
+                </div>
+
+                <section class="cache-defense-cache partitioned">
+                  <div class="cache-defense-title">加防护后</div>
+                  <div class="cache-defense-header">
+                    <span></span>
+                    <strong>Domain0</strong>
+                    <strong>Domain1</strong>
+                  </div>
+                  <div class="cache-defense-grid">
+                    <span>Set0</span><b class="domain-zero"></b><b class="domain-one"></b>
+                    <span>Set1</span><b class="domain-zero"></b><b class="domain-one"></b>
+                    <span>Set2</span><b class="domain-zero"></b><b class="domain-one"></b>
+                    <span>...</span><b class="ellipsis">...</b><b class="ellipsis">...</b>
+                    <span>Set31</span><b class="domain-zero"></b><b class="domain-one"></b>
+                  </div>
+                </section>
+              </div>
+
+              <div class="cache-address-map" aria-label="Cache 地址字段划分">
+                <div class="cache-address-row">
+                  <span>原始地址</span>
+                  <b class="tag">Tag 31:11</b>
+                  <b class="set">Set Index 10:6</b>
+                  <b class="offset">Offset 5:0</b>
+                </div>
+                <div class="cache-address-row protected">
+                  <span>防护地址</span>
+                  <b class="tag">Tag</b>
+                  <b class="domain">bit23 Domain</b>
+                  <b class="set">Set Index</b>
+                  <b class="offset">Offset</b>
+                </div>
+              </div>
+
+              <div class="cache-defense-proof">
+                <article>
+                  <span>01</span>
+                  <div><strong>Way 分域</strong></div>
+                </article>
+                <article>
+                  <span>02</span>
+                  <div><strong>跨域驱逐阻断</strong></div>
+                </article>
+                <article>
+                  <span>03</span>
+                  <div><strong>Hit/Miss 信号削弱</strong></div>
+                </article>
+              </div>
+            </section>
+            <section class="panel tlb-defense-architecture" id="tlbDefenseArchitecture">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">DEFENSE ARCHITECTURE</span>
+                  <h2>TLB 分区防护架构</h2>
+                </div>
+                <div class="button-row">
+                  <span class="badge muted">2 Set × 2 Way</span>
+                  <span class="badge good">SID 分域</span>
+                </div>
+              </div>
+
+              <div class="tlb-diagram-stage tlb-defense-stage">
+                <div class="tlb-diagram tlb-defense-diagram" aria-label="TLB 分区防护架构示意图">
+                  <div class="tlb-process-lane attacker">
+                    <span class="tlb-domain-label">攻击域</span>
+                    <strong>攻击进程</strong>
+                    <span class="tlb-action">Prime 填充</span>
+                    <span class="tlb-action">Probe 回访</span>
+                    <small>SID 0</small>
+                  </div>
+                  <div class="tlb-map-arrow attacker-map" aria-hidden="true">
+                    <span>SID 0</span>
+                    <i>⟶</i>
+                  </div>
+                  <div class="tlb-set-stack">
+                    <div class="tlb-dtlb-title">分区后的 DTLB</div>
+                    <div class="tlb-set-row" data-tlb-set="0">
+                      <span>Set 0</span>
+                      <b>SID 0 · Way 0</b>
+                      <b>SID 0 · Way 1</b>
+                    </div>
+                    <div class="tlb-partition-divider"><span>Set 边界隔离</span></div>
+                    <div class="tlb-set-row" data-tlb-set="1">
+                      <span>Set 1</span>
+                      <b>SID 1 · Way 0</b>
+                      <b>SID 1 · Way 1</b>
+                    </div>
+                  </div>
+                  <div class="tlb-map-arrow victim-map" aria-hidden="true">
+                    <span>SID 1</span>
+                    <i>⟵</i>
+                  </div>
+                  <div class="tlb-process-lane victim">
+                    <span class="tlb-domain-label">受害域</span>
+                    <strong>受害进程</strong>
+                    <span class="tlb-action">Secret 访问</span>
+                    <span class="tlb-action">独立 Set</span>
+                    <small>SID 1</small>
+                  </div>
+                  <div class="tlb-diagram-state">Probe 信号隔离</div>
+                </div>
+              </div>
+
+              <div class="tlb-defense-proof">
+                <article>
+                  <span>01</span>
+                  <div><strong>SID 分域</strong></div>
+                </article>
+                <article>
+                  <span>02</span>
+                  <div><strong>跨域驱逐阻断</strong></div>
+                </article>
+                <article>
+                  <span>03</span>
+                  <div><strong>Probe 信号消失</strong></div>
+                </article>
+              </div>
+            </section>
           </div>
 
-          <section class="panel">
+          <section class="panel recent-protection-panel">
             <div class="panel-head">
               <div>
                 <span class="eyebrow">采集记录</span>
@@ -355,7 +764,6 @@
             <pre class="record-log" id="latestOutput">暂无采集数据</pre>
           </section>
         </section>
-
         <section class="view" id="compare">
           <section class="panel report-panel">
             <div class="panel-head">
@@ -514,6 +922,6 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./src/main.js?v=20260807-tlb-defense-layout"></script>
   </body>
 </html>

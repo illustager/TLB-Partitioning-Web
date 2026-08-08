@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
 
 	pp_init(cache_sets, line_shift, cache_level);
 	udp_init();
-	
+
 	FOUT = true;
 	printf("Recovered key:");
 	fflush(stdout);
