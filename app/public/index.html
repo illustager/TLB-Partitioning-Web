@@ -894,28 +894,6 @@
 
               </div>
 
-              <div class="cache-summary-grid">
-                <article class="cache-summary-item">
-                  <span>Miss 平均</span>
-                  <strong id="cacheMissAverage">--</strong>
-                  <small id="cacheMissSummary">Clock Cycles</small>
-                </article>
-                <article class="cache-summary-item">
-                  <span>Hit 平均</span>
-                  <strong id="cacheHitAverage">--</strong>
-                  <small id="cacheHitSummary">Clock Cycles</small>
-                </article>
-                <article class="cache-summary-item">
-                  <span>Domain0 重读</span>
-                  <strong id="cacheSecurityRead">--</strong>
-                  <small id="cacheSecuritySummary">等待安全性采集</small>
-                </article>
-                <article class="cache-summary-item">
-                  <span>当前数据版本</span>
-                  <strong id="cacheVariantSummary">--</strong>
-                  <small>原始版 / 防护版</small>
-                </article>
-              </div>
 
               <div class="cache-chart-grid">
                 <article class="chart-card cache-chart-card">
@@ -924,7 +902,6 @@
                       <span class="eyebrow">Effectiveness</span>
                       <h3>Cache Miss 访问周期</h3>
                     </div>
-                    <span class="badge muted" id="cacheMissBadge">等待采集</span>
                   </div>
                   <svg class="bar-chart cache-chart" id="cacheMissChart" viewBox="0 0 760 330" role="img" aria-label="Cache Miss 访问周期对比"></svg>
                 </article>
@@ -935,7 +912,6 @@
                       <span class="eyebrow">Effectiveness</span>
                       <h3>Cache Hit 访问周期</h3>
                     </div>
-                    <span class="badge muted" id="cacheHitBadge">等待采集</span>
                   </div>
                   <svg class="bar-chart cache-chart" id="cacheHitChart" viewBox="0 0 760 330" role="img" aria-label="Cache Hit 访问周期对比"></svg>
                 </article>
@@ -946,7 +922,6 @@
                       <span class="eyebrow">Security</span>
                       <h3>跨域隔离验证</h3>
                     </div>
-                    <span class="badge muted" id="cacheSecurityBadge">等待采集</span>
                   </div>
                   <svg class="bar-chart cache-chart" id="cacheSecurityChart" viewBox="0 0 760 330" role="img" aria-label="Cache 跨域隔离验证"></svg>
                 </article>
