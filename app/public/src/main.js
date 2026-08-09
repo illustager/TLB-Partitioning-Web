@@ -63,6 +63,7 @@ const commandLabels = {
   runCacheAllRounds: "Cache 完整采集"
 };
 
+// 图表颜色映射
 const chartColors = {
   unprotected: "#2b78aa",
   protected: "#dd7416",
@@ -73,9 +74,19 @@ const chartColors = {
   reference: "#2d7a35"
 };
 
+// TLB 分区隔离验证无防护参考值 (EVICT_PAGES=8, 16, 32)
 const REF_TLB_DELTA = [77, 77, 77];
 
+// Cache Miss 无防护参考值 (D0/W0, D0/W1, D1/W0, D1/W1)
+const CACHE_MISS_REF = [0x69, 0x46, 0x3C, 0x3B];
+// Cache Hit 无防护参考值
+const CACHE_HIT_REF = [0x0c, 0x0c, 0x00, 0x0c];
+// 跨域隔离验证无防护参考值
+const CACHE_SECURITY_REF = [0x3B, 0x3a, 0x3b, 0x3a];
+
+// TLB 性能指标固定参考数据
 const fixedReportData = {
+  // TLB 分区性能 (EVICT_PAGES 对照)
   partition: {
     type: "partition-bar",
     selector: "#coremarkChart",
@@ -83,6 +94,7 @@ const fixedReportData = {
     categories: ["8", "16", "32"],
     fallbackValues: [0, 0, 0]
   },
+  // 进程上下文切换开销 (迭代次数对照)
   processSwitch: {
     type: "grouped-bar",
     selector: "#processSwitchChart",
@@ -91,6 +103,7 @@ const fixedReportData = {
     baseline: [846.59, 815.32, 826.93],
     protectedFixed: [null, null, 893.02]
   },
+  // 线程上下文切换开销
   threadSwitch: {
     type: "grouped-bar",
     selector: "#threadSwitchChart",
@@ -99,6 +112,7 @@ const fixedReportData = {
     baseline: [985.34, 930.22, 898.43],
     protectedFixed: [null, null, 1014.27]
   },
+  // Hackbench 并发调度压力
   hackbench: {
     type: "value-line",
     selector: "#hackbenchChart",
@@ -478,7 +492,9 @@ function formatOverheadRange(baseline, realValues) {
   return `${formatPercent(min)} - ${formatPercent(max)}`;
 }
 
+// Cache 性能图表横轴 (Domain/Way 分组)
 const cacheEffectivenessCategories = ["D0 / W0", "D0 / W1", "D1 / W0", "D1 / W1"];
+// Cache 安全图表横轴 (跨域访问序列)
 const cacheSecurityCategories = ["D0 首次读", "D1 读 1", "D1 读 2", "D0 重读"];
 
 function cacheVariantSeries(variants, valueKey) {
@@ -506,7 +522,10 @@ function buildCacheCharts(cache) {
       selector: "#cacheMissChart",
       unit: "Clock Cycles",
       categories: cacheEffectivenessCategories,
-      series: cacheVariantSeries(effectiveness, "missValues"),
+      series: [
+        { name: "无防护参考值", color: chartColors.unprotected, values: CACHE_MISS_REF },
+        ...cacheVariantSeries(effectiveness, "missValues")
+      ],
       emptyLabel: "等待 Cache 防护有效性采集"
     },
     {
@@ -514,7 +533,10 @@ function buildCacheCharts(cache) {
       selector: "#cacheHitChart",
       unit: "Clock Cycles",
       categories: cacheEffectivenessCategories,
-      series: cacheVariantSeries(effectiveness, "hitValues"),
+      series: [
+        { name: "无防护参考值", color: chartColors.unprotected, values: CACHE_HIT_REF },
+        ...cacheVariantSeries(effectiveness, "hitValues")
+      ],
       emptyLabel: "等待 Cache 防护有效性采集"
     },
     {
@@ -522,7 +544,10 @@ function buildCacheCharts(cache) {
       selector: "#cacheSecurityChart",
       unit: "Clock Cycles",
       categories: cacheSecurityCategories,
-      series: cacheVariantSeries(security, "times"),
+      series: [
+        { name: "无防护参考值", color: chartColors.unprotected, values: CACHE_SECURITY_REF },
+        ...cacheVariantSeries(security, "times")
+      ],
       threshold: 30,
       thresholdLabel: "Hit / Miss 阈值 30 cyc",
       emptyLabel: "等待 Cache 安全性采集"
@@ -683,26 +708,9 @@ function updateCacheReport(parsed = parseCollectedMeasurements()) {
   const security = selectCacheVariant(cache.security);
   const effectivenessCount = [cache.effectiveness?.original, cache.effectiveness?.mitigated, cache.effectiveness?.current].filter(Boolean).length;
   const securityCount = [cache.security?.original, cache.security?.mitigated, cache.security?.current].filter(Boolean).length;
-  const collectedCount = effectivenessCount + securityCount;
-  const measurements = [
-    cache.effectiveness?.original,
-    cache.effectiveness?.mitigated,
-    cache.security?.original,
-    cache.security?.mitigated
-  ].filter(Boolean);
-  const invalidCount = measurements.filter((measurement) => !measurement.valid).length;
   const effectivenessValid = Boolean(effectiveness?.valid);
   const securityValid = Boolean(security?.valid);
 
-  setBadge(
-    $("#cacheReportStatus"),
-    invalidCount ? "bad" : collectedCount === 4 ? "good" : collectedCount ? "idle" : "muted",
-    invalidCount
-      ? `已采集 ${collectedCount}/4 组，${invalidCount} 组异常`
-      : collectedCount
-        ? `已采集 ${collectedCount}/4 组`
-        : "等待采集"
-  );
   setBadge(
     $("#cacheMissBadge"),
     !effectiveness ? "muted" : effectivenessValid ? "good" : "bad",
