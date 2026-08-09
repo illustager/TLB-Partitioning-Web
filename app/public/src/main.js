@@ -981,9 +981,12 @@ function parseTlbAttackOutput(output = "") {
   });
 
   const idleThrashDelta = Object.entries(relation).find(([label]) => /switch\+thrash\+load\)\s*-\s*\(switch\+idle\+load\)/i.test(label))?.[1] ?? null;
+  const th = Object.entries(relation).find(([label]) => /local_miss\s*-\s*local_hit/i.test(label))?.[1] ?? null;
   const hitP50 = calibration?.hitP50 ?? steps.get(1)?.p50 ?? null;
   const missP50 = calibration?.missP50 ?? steps.get(2)?.p50 ?? null;
   const threshold = calibration?.threshold ?? (hitP50 !== null && missP50 !== null ? Math.round((hitP50 + missP50) / 2) : null);
+  var idle = steps.get(3)?.p50 ?? null;
+  var thrash = steps.get(4)?.p50 ?? null;
 
   return {
     hasOutput: /(?:^|\n)(?:===\s*Step-by-step TLB|CONFIG:|STEP\d+\b|RELATION\b)/im.test(stripAnsi(output)),
@@ -995,6 +998,9 @@ function parseTlbAttackOutput(output = "") {
     missP50,
     threshold,
     idleThrashDelta,
+    th,
+    idle,
+    thrash,
     demo,
     tx,
     rx,
@@ -1061,10 +1067,9 @@ function renderTlbAttackView() {
 
   setText("#tlbHitP50", parsed.hitP50 === null ? "--" : `${parsed.hitP50}`);
   setText("#tlbMissP50", parsed.missP50 === null ? "--" : `${parsed.missP50}`);
-  setText("#tlbThreshold", parsed.threshold === null ? "--" : `${parsed.threshold}`);
-  setText("#tlbIdleThrashDelta", parsed.idleThrashDelta === null ? "--" : `${parsed.idleThrashDelta}`);
-  setText("#tlbSidValue", parsed.sid ? `${parsed.sid.parent} / ${parsed.sid.child}` : "--");
-  setText("#tlbBitMatch", parsed.demo ? `${parsed.demo.bac.toFixed(1)}%` : "--");
+  setText("#tlbTH", parsed.th === null ? "--" : `${parsed.th}`);
+  setText("#tlbIdle", parsed.idle === null ? "--" : `${parsed.idle}`);
+  setText("#tlbThrash", parsed.thrash === null ? "--" : `${parsed.thrash}`);
   setText("#tlbTxBits", parsed.tx || "等待真实输出");
   setText("#tlbRxBits", parsed.rx || "等待真实输出");
 
