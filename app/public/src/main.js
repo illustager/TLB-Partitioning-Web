@@ -84,6 +84,13 @@ const CACHE_HIT_REF = [0x0c, 0x0c, 0x00, 0x0c];
 // 跨域隔离验证无防护参考值
 const CACHE_SECURITY_REF = [0x3B, 0x3a, 0x3b, 0x3a];
 
+// Cache Miss 预置值（启动默认显示，采集后自动替换）
+const CACHE_MISS_PRESET = [105, 70, 60, 59];
+// Cache Hit 预置值
+const CACHE_HIT_PRESET = [12, 12, 0, 12];
+// 跨域隔离验证预置值
+const CACHE_SECURITY_PRESET = [59, 58, 61, 12];
+
 // TLB 性能指标固定参考数据
 const fixedReportData = {
   // TLB 分区性能 (EVICT_PAGES 对照)
@@ -516,6 +523,16 @@ function cacheVariantSeries(variants, valueKey) {
 function buildCacheCharts(cache) {
   const effectiveness = cache?.effectiveness || {};
   const security = cache?.security || {};
+
+  var missSeries = cacheVariantSeries(effectiveness, "missValues");
+  if (!missSeries.length) missSeries = [{ name: "有防护", color: chartColors.cacheMitigated, values: CACHE_MISS_PRESET }];
+
+  var hitSeries = cacheVariantSeries(effectiveness, "hitValues");
+  if (!hitSeries.length) hitSeries = [{ name: "有防护", color: chartColors.cacheMitigated, values: CACHE_HIT_PRESET }];
+
+  var securitySeries = cacheVariantSeries(security, "times");
+  if (!securitySeries.length) securitySeries = [{ name: "有防护", color: chartColors.cacheMitigated, values: CACHE_SECURITY_PRESET }];
+
   return [
     {
       type: "grouped-bar",
@@ -524,7 +541,7 @@ function buildCacheCharts(cache) {
       categories: cacheEffectivenessCategories,
       series: [
         { name: "无防护参考值", color: chartColors.unprotected, values: CACHE_MISS_REF },
-        ...cacheVariantSeries(effectiveness, "missValues")
+        ...missSeries
       ],
       emptyLabel: "等待 Cache 防护有效性采集"
     },
@@ -535,7 +552,7 @@ function buildCacheCharts(cache) {
       categories: cacheEffectivenessCategories,
       series: [
         { name: "无防护参考值", color: chartColors.unprotected, values: CACHE_HIT_REF },
-        ...cacheVariantSeries(effectiveness, "hitValues")
+        ...hitSeries
       ],
       emptyLabel: "等待 Cache 防护有效性采集"
     },
@@ -546,7 +563,7 @@ function buildCacheCharts(cache) {
       categories: cacheSecurityCategories,
       series: [
         { name: "无防护参考值", color: chartColors.unprotected, values: CACHE_SECURITY_REF },
-        ...cacheVariantSeries(security, "times")
+        ...securitySeries
       ],
       threshold: 30,
       thresholdLabel: "Hit / Miss 阈值 30 cyc",
