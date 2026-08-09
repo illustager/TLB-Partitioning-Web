@@ -680,18 +680,18 @@ function buildTlbSecurityChart(parsed) {
   var byEvict = new Map(parsed.partition.map(function (s) { return [s.evictPages, s]; }));
 
   var hasData = parsed.partition.length > 0;
-  var p50Values = hasData
+  var p50Values = (hasData
     ? evictPages.map(function (ep) {
         var s = byEvict.get(ep);
         return s && s.deltaP50 ? s.deltaP50.median : null;
       })
-    : TLB_SECURITY_P50_PRESET;
-  var p90Values = hasData
+    : TLB_SECURITY_P50_PRESET).map(function (v) { return v !== null ? Math.abs(v) : null; });
+  var p90Values = (hasData
     ? evictPages.map(function (ep) {
         var s = byEvict.get(ep);
         return s && s.deltaP90 ? s.deltaP90.median : null;
       })
-    : TLB_SECURITY_P90_PRESET;
+    : TLB_SECURITY_P90_PRESET).map(function (v) { return v !== null ? Math.abs(v) : null; });
 
   return {
     type: "grouped-bar",
@@ -704,7 +704,6 @@ function buildTlbSecurityChart(parsed) {
       { name: "delta p50", color: chartColors.partition, values: p50Values },
       { name: "delta p90", color: chartColors.protected, values: p90Values }
     ],
-    minValue: -5,
     emptyLabel: "等待 TLB 安全采集"
   };
 }
