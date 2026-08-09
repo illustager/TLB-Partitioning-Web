@@ -264,17 +264,13 @@ function parseCoremarkResults(output) {
   return results;
 }
 
-const cacheMaxCycleValue = 100000n;
-
 function parseCacheCycleLine(line) {
   const text = line.trim();
   const match = text.match(/^addr=[A-Za-z0-9_-]+:([0-9A-Fa-f]{16})$/i);
   if (!match) return { matched: false, value: null };
 
-  const rawHex = match[1];
-  const rawValue = BigInt(`0x${rawHex}`);
-  const lowByte = Number.parseInt(rawHex.slice(-2), 16);
-  const value = rawValue <= cacheMaxCycleValue ? Number(rawValue) : lowByte;
+  var rawHex = match[1];
+  var value = Number.parseInt(rawHex.slice(-2), 16);
   return { matched: true, value };
 }
 
