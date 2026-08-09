@@ -8,7 +8,8 @@ const state = {
   sshSession: null,
   unprotectedSession: null,
   latestResult: null,
-  tlbAttackGuideStep: 0
+  tlbAttackGuideStep: 0,
+  collectionChain: null
 };
 
 const views = {
@@ -1251,14 +1252,15 @@ function renderProtectedState() {
   const targetName = protection === "cache" ? "Cache" : protection === "tlb" ? "TLB" : "设备";
   const securityKey = protection === "cache" ? "runCacheSecurity" : "runProtectionTest";
   const performanceKey = protection === "cache" ? "runCacheEffectiveness" : "runPerformanceTest";
-  $("#runSecurityBtn").disabled = !connected || collecting;
-  $("#runPerformanceBtn").disabled = !connected || collecting;
-  $("#runSecurityBtn").textContent = collecting && state.latestResult?.commandKey === securityKey
-    ? `${targetName} 安全采集中...`
-    : `采集 ${targetName} 安全结果`;
-  $("#runPerformanceBtn").textContent = collecting && state.latestResult?.commandKey === performanceKey
-    ? `${targetName} 性能采集中...`
-    : `采集 ${targetName} 性能结果`;
+  var collectingLabel = "";
+  if (collecting) {
+    var cmd = state.latestResult?.commandKey;
+    if (cmd === securityKey) collectingLabel = `${targetName} 安全采集中...`;
+    else if (cmd === performanceKey) collectingLabel = `${targetName} 性能采集中...`;
+    else collectingLabel = `${targetName} 采集中...`;
+  }
+  $("#runCollectionBtn").disabled = !connected || collecting;
+  $("#runCollectionBtn").textContent = collecting ? collectingLabel : `采集 ${targetName} 结果`;
 }
 
 function collectionCommandKey(category) {
@@ -1471,6 +1473,17 @@ function renderLatestResult(result) {
   renderProtectedState();
   renderTlbAttackView();
   renderOverview();
+
+  if (state.collectionChain && result && result.status === "captured") {
+    var nextKey = state.collectionChain.next;
+    var targetLabel = state.collectionChain.label;
+    state.collectionChain = null;
+    apiPost("/api/fpga/run/preset", { commandKey: nextKey }).then(function (payload) {
+      setStatus(payload);
+      renderResultPayload(payload);
+      toast(`已开始${targetLabel}性能采集`);
+    });
+  }
 }
 
 function renderResultPayload(payload) {
@@ -1609,20 +1622,14 @@ function bindEvents() {
     toast("终端输出已复制");
   }));
 
-  $("#runSecurityBtn").addEventListener("click", () => safeAction(async () => {
-    const commandKey = collectionCommandKey("security");
-    const payload = await apiPost("/api/fpga/run/preset", { commandKey });
+  $("#runCollectionBtn").addEventListener("click", () => safeAction(async () => {
+    const securityKey = collectionCommandKey("security");
+    const performanceKey = collectionCommandKey("performance");
+    state.collectionChain = { next: performanceKey, label: protectionLabel(currentTarget()) };
+    const payload = await apiPost("/api/fpga/run/preset", { commandKey: securityKey });
     setStatus(payload);
     renderResultPayload(payload);
-    toast(`已开始${protectionLabel(currentTarget())}安全采集`);
-  }));
-
-  $("#runPerformanceBtn").addEventListener("click", () => safeAction(async () => {
-    const commandKey = collectionCommandKey("performance");
-    const payload = await apiPost("/api/fpga/run/preset", { commandKey });
-    setStatus(payload);
-    renderResultPayload(payload);
-    toast(`已开始${protectionLabel(currentTarget())}性能采集`);
+    toast(`已开始${protectionLabel(currentTarget())}安全采集 → 完成后自动执行性能采集`);
   }));
 
   $("#refreshResultBtn").addEventListener("click", () => safeAction(async () => {
