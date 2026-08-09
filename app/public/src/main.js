@@ -507,7 +507,7 @@ function formatOverheadRange(baseline, realValues) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   if (Math.abs(max - min) < 0.01) return formatPercent(max);
-  return `${formatPercent(min)} - ${formatPercent(max)}`;
+  return `≤ ${formatPercent(max)}`;
 }
 
 // Cache 性能图表横轴 (Domain/Way 分组)
