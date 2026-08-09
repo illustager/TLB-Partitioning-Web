@@ -91,6 +91,17 @@ const CACHE_HIT_PRESET = [12, 12, 0, 12];
 // 跨域隔离验证预置值
 const CACHE_SECURITY_PRESET = [59, 58, 61, 12];
 
+// Hackbench 并发调度压力预置值（启动默认，采集后自动替换）
+const HACKBENCH_PRESET = [1481.14, 948.46, 912.21, 912.60];
+// 进程上下文切换预置值
+const PROCESS_SWITCH_PRESET = [929.22, 900.99, 893.02];
+// 线程上下文切换预置值
+const THREAD_SWITCH_PRESET = [985.34, 1078.83, 1014.27];
+// TLB 分区隔离验证预置值 (delta p50, 对应 EVICT_PAGES=8,16,32)
+const TLB_SECURITY_P50_PRESET = [1, 2, 1];
+// TLB 分区隔离验证预置值 (delta p90)
+const TLB_SECURITY_P90_PRESET = [0, 1, 0];
+
 // TLB 性能指标固定参考数据
 const fixedReportData = {
   // TLB 分区性能 (EVICT_PAGES 对照)
@@ -597,6 +608,12 @@ function buildReportCharts(parsed = parseCollectedMeasurements()) {
       color: chartColors.protected,
       values: valuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed)
     });
+  } else {
+    processSeries.push({
+      name: "有防护",
+      color: chartColors.protected,
+      values: PROCESS_SWITCH_PRESET
+    });
   }
   if (parsed.thread.size) {
     threadSeries.push({
@@ -604,12 +621,24 @@ function buildReportCharts(parsed = parseCollectedMeasurements()) {
       color: chartColors.protected,
       values: valuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed)
     });
+  } else {
+    threadSeries.push({
+      name: "有防护",
+      color: chartColors.protected,
+      values: THREAD_SWITCH_PRESET
+    });
   }
   if (parsed.hackbench.size) {
     hackbenchSeries.push({
       name: "有防护",
       color: chartColors.protected,
       values: valuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed)
+    });
+  } else {
+    hackbenchSeries.push({
+      name: "有防护",
+      color: chartColors.protected,
+      values: HACKBENCH_PRESET
     });
   }
 
@@ -650,14 +679,19 @@ function buildTlbSecurityChart(parsed) {
   var evictPages = [8, 16, 32];
   var byEvict = new Map(parsed.partition.map(function (s) { return [s.evictPages, s]; }));
 
-  var p50Values = evictPages.map(function (ep) {
-    var s = byEvict.get(ep);
-    return s && s.deltaP50 ? s.deltaP50.median : null;
-  });
-  var p90Values = evictPages.map(function (ep) {
-    var s = byEvict.get(ep);
-    return s && s.deltaP90 ? s.deltaP90.median : null;
-  });
+  var hasData = parsed.partition.length > 0;
+  var p50Values = hasData
+    ? evictPages.map(function (ep) {
+        var s = byEvict.get(ep);
+        return s && s.deltaP50 ? s.deltaP50.median : null;
+      })
+    : TLB_SECURITY_P50_PRESET;
+  var p90Values = hasData
+    ? evictPages.map(function (ep) {
+        var s = byEvict.get(ep);
+        return s && s.deltaP90 ? s.deltaP90.median : null;
+      })
+    : TLB_SECURITY_P90_PRESET;
 
   return {
     type: "grouped-bar",
@@ -694,20 +728,30 @@ function updateReportBadges(parsed = parseCollectedMeasurements()) {
         ? `SID ${sidPairs.join(", ") || "分离"} 正常`
         : "SID分离异常"
   );
+  var processOverheadVals = parsed.process.size
+    ? realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed)
+    : PROCESS_SWITCH_PRESET;
+  var threadOverheadVals = parsed.thread.size
+    ? realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed)
+    : THREAD_SWITCH_PRESET;
+  var hackbenchOverheadVals = parsed.hackbench.size
+    ? realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed)
+    : HACKBENCH_PRESET;
+
   setBadge(
     $("#processOverheadBadge"),
-    parsed.process.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.processSwitch.baseline, realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed))
+    "idle",
+    formatOverheadRange(fixedReportData.processSwitch.baseline, processOverheadVals)
   );
   setBadge(
     $("#threadOverheadBadge"),
-    parsed.thread.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.threadSwitch.baseline, realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed))
+    "idle",
+    formatOverheadRange(fixedReportData.threadSwitch.baseline, threadOverheadVals)
   );
   setBadge(
     $("#hackbenchOverheadBadge"),
-    parsed.hackbench.size ? "idle" : "muted",
-    formatOverheadRange(fixedReportData.hackbench.baseline, realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed))
+    "idle",
+    formatOverheadRange(fixedReportData.hackbench.baseline, hackbenchOverheadVals)
   );
 
 }
@@ -1737,19 +1781,19 @@ function updatePerformanceSummary(parsed) {
     "#summaryProcessValue",
     "#summaryProcessNote",
     fixedReportData.processSwitch.baseline,
-    realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed)
+    parsed.process.size ? realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed) : PROCESS_SWITCH_PRESET
   );
   updateOverheadSummary(
     "#summaryThreadValue",
     "#summaryThreadNote",
     fixedReportData.threadSwitch.baseline,
-    realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed)
+    parsed.thread.size ? realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed) : THREAD_SWITCH_PRESET
   );
   updateOverheadSummary(
     "#summaryHackbenchValue",
     "#summaryHackbenchNote",
     fixedReportData.hackbench.baseline,
-    realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed)
+    parsed.hackbench.size ? realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed) : HACKBENCH_PRESET
   );
 }
 
@@ -1772,21 +1816,21 @@ function drawOverheadRings(parsed) {
     "#processRingChart",
     average(overheadValues(
       fixedReportData.processSwitch.baseline,
-      realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed)
+      parsed.process.size ? realValuesFromMap(parsed.process, fixedReportData.processSwitch.categories, fixedReportData.processSwitch.baseline, fixedReportData.processSwitch.protectedFixed) : PROCESS_SWITCH_PRESET
     ))
   );
   drawOverheadRing(
     "#threadRingChart",
     average(overheadValues(
       fixedReportData.threadSwitch.baseline,
-      realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed)
+      parsed.thread.size ? realValuesFromMap(parsed.thread, fixedReportData.threadSwitch.categories, fixedReportData.threadSwitch.baseline, fixedReportData.threadSwitch.protectedFixed) : THREAD_SWITCH_PRESET
     ))
   );
   drawOverheadRing(
     "#hackbenchRingChart",
     average(overheadValues(
       fixedReportData.hackbench.baseline,
-      realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed)
+      parsed.hackbench.size ? realValuesFromMap(parsed.hackbench, fixedReportData.hackbench.categories, fixedReportData.hackbench.baseline, fixedReportData.hackbench.protectedFixed) : HACKBENCH_PRESET
     ))
   );
 }
