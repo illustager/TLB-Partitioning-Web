@@ -1180,8 +1180,6 @@ function renderTlbAttackView() {
       5: "Secret bit"
     })[stage] || "TLB 攻击原理");
   }
-  $("#tlbTxBits").title = parsed.tx || "";
-  $("#tlbRxBits").title = parsed.rx || "";
 }
 
 function appendTerminal(text) {
