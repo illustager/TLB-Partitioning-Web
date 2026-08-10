@@ -57,7 +57,8 @@ const commandLabels = {
   runPerfProc: "进程上下文切换压力测试",
   runPerfThread: "线程上下文切换压力测试",
   runPerfConcurrent: "Hackbench 并发调度压力测试",
-  runTestNo: "TLB 攻击演示",
+  runTlbAttack: "TLB 攻击演示",
+  runTlbAttackProtected: "TLB 加固攻击演示",
   runCacheEffectiveness: "Cache 性能采集",
   runCacheSecurity: "Cache 安全采集",
   runCacheAllRounds: "Cache 完整采集"
@@ -187,12 +188,15 @@ function binToHexBytes(bin) {
   return bytes;
 }
 
-function renderTlbBits(txBin, rxBin) {
+function renderTlbBits(txBin, rxBin, rxProtectedBin) {
   var txBytesContainer = $("#tlbTxBytes");
   var rxBytesContainer = $("#tlbRxBytes");
+  var rxProtectedContainer = $("#tlbRxProtectedBytes");
+  var placeholder = '<span class="tlb-byte placeholder">--</span>'.repeat(8);
   if (!txBin || !rxBin) {
-    if (txBytesContainer) txBytesContainer.innerHTML = '<span class="tlb-byte placeholder">--</span>'.repeat(8);
-    if (rxBytesContainer) rxBytesContainer.innerHTML = '<span class="tlb-byte placeholder">--</span>'.repeat(8);
+    if (txBytesContainer) txBytesContainer.innerHTML = placeholder;
+    if (rxBytesContainer) rxBytesContainer.innerHTML = placeholder;
+    if (rxProtectedContainer) rxProtectedContainer.innerHTML = placeholder;
     return;
   }
   var txBytes = binToHexBytes(txBin);
@@ -200,13 +204,18 @@ function renderTlbBits(txBin, rxBin) {
   if (!txBytes.length || !rxBytes.length) return;
   var txHtml = "";
   var rxHtml = "";
+  var rxProtectedHtml = "";
+  var rxProtectedBytes = rxProtectedBin ? binToHexBytes(rxProtectedBin) : [];
   for (var i = 0; i < txBytes.length; i++) {
     txHtml += '<span class="tlb-byte">' + txBytes[i] + '</span>';
-    var cls = txBytes[i] === rxBytes[i] ? "match" : "mismatch";
-    rxHtml += '<span class="tlb-byte ' + cls + '">' + rxBytes[i] + '</span>';
+    rxHtml += '<span class="tlb-byte ' + (txBytes[i] === rxBytes[i] ? "match" : "mismatch") + '">' + rxBytes[i] + '</span>';
+    if (rxProtectedBytes.length) {
+      rxProtectedHtml += '<span class="tlb-byte ' + (txBytes[i] === rxProtectedBytes[i] ? "match" : "mismatch") + '">' + rxProtectedBytes[i] + '</span>';
+    }
   }
   if (txBytesContainer) txBytesContainer.innerHTML = txHtml;
   if (rxBytesContainer) rxBytesContainer.innerHTML = rxHtml;
+  if (rxProtectedContainer) rxProtectedContainer.innerHTML = rxProtectedHtml || placeholder;
 }
 
 function collectResultOutputs(preferredResult = null) {
@@ -1106,12 +1115,34 @@ function parseTlbAttackOutput(output = "") {
   };
 }
 
+function resultByCommandKey(commandKey) {
+  var results = state.resultsByCommand || {};
+  var target = currentTarget();
+  var protection = target?.protection || "";
+  for (var key in results) {
+    var entry = results[key];
+    if (entry.commandKey === commandKey && entry.protection === protection) return entry;
+  }
+  return null;
+}
+
 function tlbAttackOutput() {
-  const result = state.latestResult;
-  if (result?.commandKey === "runTestNo" && result.status === "captured") return result.output || "";
-  const raw = state.terminalText || result?.output || "";
-  const start = raw.search(/(?:^|\n)(?:===\s*Step-by-step TLB|CONFIG:|STEP\d+\b)/i);
+  var result = resultByCommandKey("runTlbAttack");
+  if (result?.status === "captured") return result.output || "";
+  var latest = state.latestResult;
+  if (latest?.commandKey === "runTlbAttack" && latest.status === "captured") return latest.output || "";
+  var raw = state.terminalText || latest?.output || "";
+  var start = raw.search(/(?:^|\n)(?:===\s*Step-by-step TLB|CONFIG:|STEP\d+\b)/i);
   return start >= 0 ? raw.slice(start).trimStart() : "";
+}
+
+function tlbProtectedRx() {
+  var result = resultByCommandKey("runTlbAttackProtected");
+  if (result?.status === "captured") {
+    var parsed = parseTlbAttackOutput(result.output || "");
+    return parsed.rx;
+  }
+  return "";
 }
 
 function renderTlbAttackView() {
@@ -1124,7 +1155,7 @@ function renderTlbAttackView() {
   const connected = Boolean(state.sshSession?.connected);
   const target = currentTarget();
   const isTlb = connected && target?.protection === "tlb";
-  const collecting = state.latestResult?.status === "running" && state.latestResult?.commandKey === "runTestNo";
+  const collecting = state.latestResult?.status === "running" && (state.latestResult?.commandKey === "runTlbAttack" || state.latestResult?.commandKey === "runTlbAttackProtected");
 
   outputNode.textContent = tlbAttackOutput() || "等待 TLB 攻击脚本输出...";
   outputNode.scrollTop = outputNode.scrollHeight;
@@ -1166,7 +1197,7 @@ function renderTlbAttackView() {
   setText("#tlbHitP50", parsed.hitP50 === null ? "--" : `${parsed.hitP50}`);
   setText("#tlbMissP50", parsed.missP50 === null ? "--" : `${parsed.missP50}`);
   setText("#tlbTH", parsed.th === null ? "--" : `${parsed.th}`);
-  renderTlbBits(parsed.tx, parsed.rx);
+  renderTlbBits(parsed.tx, parsed.rx, tlbProtectedRx());
 
   const diagram = $(".tlb-attack-diagram");
   if (diagram) {
@@ -1573,7 +1604,7 @@ function renderLatestResult(result) {
     apiPost("/api/fpga/run/preset", { commandKey: nextKey }).then(function (payload) {
       setStatus(payload);
       renderResultPayload(payload);
-      toast(`已开始${targetLabel}性能采集`);
+      toast(`已开始${targetLabel}`);
     });
   }
 }
@@ -1608,11 +1639,11 @@ function bindEvents() {
   $("#connectBtn").addEventListener("click", () => safeAction(toggleConnection));
 
   $("#runTlbAttackBtn").addEventListener("click", () => safeAction(async () => {
-
-    const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runTestNo" });
+    state.collectionChain = { next: "runTlbAttackProtected", label: "TLB 加固攻击采集" };
+    const payload = await apiPost("/api/fpga/run/preset", { commandKey: "runTlbAttack" });
     setStatus(payload);
     renderResultPayload(payload);
-    toast("已启动 TLB 无防护攻击");
+    toast("已启动 TLB 无防护攻击 → 完成后自动执行加固攻击");
   }));
 
   $("#tlbGuidePrevBtn").addEventListener("click", () => {
@@ -1717,7 +1748,7 @@ function bindEvents() {
   $("#runCollectionBtn").addEventListener("click", () => safeAction(async () => {
     const securityKey = collectionCommandKey("security");
     const performanceKey = collectionCommandKey("performance");
-    state.collectionChain = { next: performanceKey, label: protectionLabel(currentTarget()) };
+    state.collectionChain = { next: performanceKey, label: `${protectionLabel(currentTarget())} 性能采集` };
     const payload = await apiPost("/api/fpga/run/preset", { commandKey: securityKey });
     setStatus(payload);
     renderResultPayload(payload);

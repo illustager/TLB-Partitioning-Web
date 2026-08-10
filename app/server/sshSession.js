@@ -324,7 +324,8 @@ export class SshSession {
       "runPerfThread",
       "runPerfConcurrent",
       "runTestWith",
-      "runTestNo",
+      "runTlbAttack",
+      "runTlbAttackProtected",
       "runCacheEffectiveness",
       "runCacheSecurity",
       "runCacheAllRounds"
