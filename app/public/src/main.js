@@ -176,6 +176,39 @@ function stripAnsi(value) {
     .replace(/\r/g, "\n");
 }
 
+function binToHexBytes(bin) {
+  if (!bin || bin.length < 8) return [];
+  var bytes = [];
+  for (var i = 0; i + 8 <= bin.length; i += 8) {
+    var hi = Number.parseInt(bin.slice(i, i + 4), 2).toString(16).toUpperCase();
+    var lo = Number.parseInt(bin.slice(i + 4, i + 8), 2).toString(16).toUpperCase();
+    bytes.push(hi + lo);
+  }
+  return bytes;
+}
+
+function renderTlbBits(txBin, rxBin) {
+  var txBytesContainer = $("#tlbTxBytes");
+  var rxBytesContainer = $("#tlbRxBytes");
+  if (!txBin || !rxBin) {
+    if (txBytesContainer) txBytesContainer.innerHTML = '<span class="tlb-byte placeholder">--</span>'.repeat(8);
+    if (rxBytesContainer) rxBytesContainer.innerHTML = '<span class="tlb-byte placeholder">--</span>'.repeat(8);
+    return;
+  }
+  var txBytes = binToHexBytes(txBin);
+  var rxBytes = binToHexBytes(rxBin);
+  if (!txBytes.length || !rxBytes.length) return;
+  var txHtml = "";
+  var rxHtml = "";
+  for (var i = 0; i < txBytes.length; i++) {
+    txHtml += '<span class="tlb-byte">' + txBytes[i] + '</span>';
+    var cls = txBytes[i] === rxBytes[i] ? "match" : "mismatch";
+    rxHtml += '<span class="tlb-byte ' + cls + '">' + rxBytes[i] + '</span>';
+  }
+  if (txBytesContainer) txBytesContainer.innerHTML = txHtml;
+  if (rxBytesContainer) rxBytesContainer.innerHTML = rxHtml;
+}
+
 function collectResultOutputs(preferredResult = null) {
   const outputs = [];
   const seen = new Set();
@@ -1098,7 +1131,7 @@ function renderTlbAttackView() {
   setText("#tlbAttackTarget", isTlb ? `${target.label || target.name} / ${target.host}` : "未配置 TLB FPGA");
   setBadge($("#tlbAttackStageBadge"), parsed.hasOutput ? "good" : "idle", parsed.hasOutput ? `演示 ${stage + 1} · ${tlbAttackStageLabels[stage] || "攻击输出"}` : "静态演示");
   setBadge($("#tlbAttackVerdict"), parsed.success ? "bad" : parsed.demo ? "warn" : "muted", parsed.success ? "无防护攻击成功" : parsed.demo ? "等待结果确认" : "等待真实输出");
-  setBadge($("#tlbReproductionBadge"), parsed.success ? "bad" : parsed.demo ? "warn" : "muted", parsed.demo ? `BAC ${parsed.demo.bac.toFixed(1)}% · BER ${parsed.demo.ber.toFixed(1)}%` : "等待重构");
+
   setBadge($("#tlbSharingBadge"), parsed.sid ? "warn" : "muted", parsed.sid ? `SID ${parsed.sid.parent} / ${parsed.sid.child}` : "等待共享观测");
 
   $("#runTlbAttackBtn").disabled = !isTlb || collecting;
@@ -1133,10 +1166,7 @@ function renderTlbAttackView() {
   setText("#tlbHitP50", parsed.hitP50 === null ? "--" : `${parsed.hitP50}`);
   setText("#tlbMissP50", parsed.missP50 === null ? "--" : `${parsed.missP50}`);
   setText("#tlbTH", parsed.th === null ? "--" : `${parsed.th}`);
-  setText("#tlbIdle", parsed.idle === null ? "--" : `${parsed.idle}`);
-  setText("#tlbThrash", parsed.thrash === null ? "--" : `${parsed.thrash}`);
-  setText("#tlbTxBits", parsed.tx || "等待真实输出");
-  setText("#tlbRxBits", parsed.rx || "等待真实输出");
+  renderTlbBits(parsed.tx, parsed.rx);
 
   const diagram = $(".tlb-attack-diagram");
   if (diagram) {

@@ -1454,15 +1454,20 @@ h3 { font-size: 16px; }
 }
 
 .tlb-story-panel,
-.tlb-principle-panel,
-.tlb-evidence-panel {
-  grid-row: 1;
+.tlb-principle-panel {
   align-self: start;
 }
 
-.tlb-story-panel { grid-column: 1; }
-.tlb-principle-panel { grid-column: 2; }
-.tlb-evidence-panel { grid-column: 3; }
+.tlb-story-panel { grid-column: 1; grid-row: 1; }
+.tlb-principle-panel { grid-column: 2; grid-row: 1; }
+.tlb-right-col { grid-column: 3; grid-row: 1; align-self: stretch; }
+
+.tlb-right-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
 
 .tlb-diagram-stage {
   min-height: 0;
@@ -2038,7 +2043,7 @@ h3 { font-size: 16px; }
   }
 
   .tlb-story-panel,
-  .tlb-evidence-panel,
+  .tlb-right-col,
   .tlb-principle-panel {
     grid-column: auto;
     grid-row: auto;
@@ -2102,7 +2107,62 @@ h3 { font-size: 16px; }
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;
-  white-space: nowrap;
+}
+
+.tlb-bits-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.tlb-bits-stack > div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.tlb-bits-stack span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tlb-bytes {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.tlb-byte {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.tlb-byte.placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.tlb-byte.match {
+  background: #d4edda;
+  border-color: #a3d9a5;
+  color: #1a5c2a;
+}
+
+.tlb-byte.mismatch {
+  background: #fff3cd;
+  border-color: #e0c770;
+  color: #7a5d00;
 }
 
 .tlb-terminal-panel { grid-column: 1 / -1; }
@@ -2735,7 +2795,8 @@ input:disabled {
   }
 
   .nav-group { grid-column: 1 / -1; }
-  .tlb-bits-grid { grid-template-columns: 1fr; }
+  .tlb-bits-grid,
+  .tlb-bits-stack { grid-template-columns: 1fr; }
   .tlb-diagram { grid-template-columns: 1fr; }
   .tlb-process-lane { min-height: auto; }
   .tlb-set-stack { order: -1; }

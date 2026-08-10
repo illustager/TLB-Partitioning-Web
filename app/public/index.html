@@ -538,36 +538,35 @@
               </div>
             </section>
 
-            <section class="panel tlb-evidence-panel">
+            <div class="tlb-right-col">
+              <section class="panel tlb-evidence-panel">
+                <div class="panel-head compact">
+                  <div>
+                    <span class="eyebrow">LIVE EVIDENCE</span>
+                    <h3>关键测量</h3>
+                  </div>
+                </div>
+                <div class="tlb-evidence-list">
+                  <div><span>Hit P50</span><strong id="tlbHitP50">--</strong><small>cycles</small></div>
+                  <div><span>Miss P50</span><strong id="tlbMissP50">--</strong><small>cycles</small></div>
+                  <div><span>TH</span><strong id="tlbTH">--</strong><small>cycles</small></div>
+                </div>
+              </section>
+
+              <section class="panel tlb-reproduction-panel">
               <div class="panel-head compact">
                 <div>
-                  <span class="eyebrow">LIVE EVIDENCE</span>
-                  <h3>关键测量</h3>
+                  <span class="eyebrow">SECRET REPRODUCTION</span>
+                  <h3>Secret 重构结果</h3>
                 </div>
               </div>
-              <div class="tlb-evidence-list">
-                <div><span>Hit P50</span><strong id="tlbHitP50">--</strong><small>cycles</small></div>
-                <div><span>Miss P50</span><strong id="tlbMissP50">--</strong><small>cycles</small></div>
-                <div><span>TH</span><strong id="tlbTH">--</strong><small>cycles</small></div>
-                <div><span>Idle</span><strong id="tlbIdle">--</strong><small>cycles</small></div>
-                <div><span>Thrash</span><strong id="tlbThrash">--</strong><small>cycles</small></div>
+              <div class="tlb-bits-stack">
+                <div><span>TX · 原始秘密数据</span><div class="tlb-bytes" id="tlbTxBytes"><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span></div></div>
+                <div><span>RX · 攻击者获取数据</span><div class="tlb-bytes" id="tlbRxBytes"><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span><span class="tlb-byte placeholder">--</span></div></div>
               </div>
             </section>
+            </div>
           </div>
-
-          <section class="panel tlb-reproduction-panel">
-            <div class="panel-head compact">
-              <div>
-                <span class="eyebrow">CROSS-PROCESS SECRET REPRODUCTION</span>
-                <h3>Secret 重构结果</h3>
-              </div>
-              <span class="badge muted" id="tlbReproductionBadge">等待重构</span>
-            </div>
-            <div class="tlb-bits-grid">
-              <div><span>TX · 原始秘密数据</span><code id="tlbTxBits">等待真实输出</code></div>
-              <div><span>RX · 攻击者获取数据</span><code id="tlbRxBits">等待真实输出</code></div>
-            </div>
-          </section>
 
           <section class="panel tlb-terminal-panel">
             <div class="panel-head compact">
