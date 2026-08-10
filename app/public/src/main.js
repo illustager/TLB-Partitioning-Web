@@ -477,11 +477,11 @@ function parseCacheMeasurements(outputs = {}) {
 
   if (!rounds.effectiveness.original && !rounds.effectiveness.mitigated) {
     const current = buildCacheMeasurement("effectiveness", extractSerialHexValues(outputs.effectiveness));
-    if (current) rounds.effectiveness.current = current;
+    if (current) rounds.effectiveness.mitigated = current;
   }
   if (!rounds.security.original && !rounds.security.mitigated) {
     const current = buildCacheMeasurement("security", extractSerialHexValues(outputs.security));
-    if (current) rounds.security.current = current;
+    if (current) rounds.security.mitigated = current;
   }
 
   return rounds;
