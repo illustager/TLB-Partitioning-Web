@@ -1218,10 +1218,17 @@ function appendTerminal(text) {
   if (state.terminalText.length > 120000) {
     state.terminalText = state.terminalText.slice(-120000);
   }
-  const node = $("#terminalOutput");
-  node.textContent = state.terminalText || "等待远程终端输出...";
-  node.scrollTop = node.scrollHeight;
+  writeTerminal(state.terminalText || "等待远程终端输出...");
   renderTlbAttackView();
+}
+
+function writeTerminal(text) {
+  for (const id of ["terminalOutput", "terminalLogOutput"]) {
+    const node = $(`#${id}`);
+    if (!node) continue;
+    node.textContent = text;
+    node.scrollTop = node.scrollHeight;
+  }
 }
 
 function currentTarget() {
@@ -1737,11 +1744,16 @@ function bindEvents() {
 
   $("#clearBtn").addEventListener("click", () => {
     state.terminalText = "";
-    $("#terminalOutput").textContent = "终端已清空";
+    writeTerminal("终端已清空");
   });
 
   $("#copyBtn").addEventListener("click", () => safeAction(async () => {
     await navigator.clipboard.writeText($("#terminalOutput").textContent);
+    toast("终端输出已复制");
+  }));
+
+  $("#copyConnTerminalBtn").addEventListener("click", () => safeAction(async () => {
+    await navigator.clipboard.writeText($("#terminalLogOutput").textContent);
     toast("终端输出已复制");
   }));
 

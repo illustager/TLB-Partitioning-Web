@@ -2315,6 +2315,10 @@ input:disabled {
   padding: 16px;
 }
 
+.connection-terminal-panel .terminal {
+  height: clamp(220px, 40vh, 380px);
+}
+
 .terminal-input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
