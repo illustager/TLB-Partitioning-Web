@@ -659,6 +659,12 @@ h3 { font-size: 16px; }
   margin: 10px 0 0;
 }
 
+.cache-advanced .connection-editor {
+  margin: 10px 0 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .unprotected-form {
   display: grid;
   grid-template-columns: minmax(260px, 1.2fr) repeat(7, minmax(96px, 0.45fr));
